@@ -24,6 +24,6 @@ Give the three single-sentence verdicts.`;
   return runStructured<CouncilResult>(prompt, schema, MOCK_COUNCIL, {
     systemPrompt: SYSTEM,
     temperature: 0.7,
-    maxOutputTokens: 200,
+    maxOutputTokens: 1500,
   });
 }

@@ -4,22 +4,20 @@ import { MOCK_DIAGNOSE } from "../mocks";
 import type { DiagnoseResult } from "../types";
 
 const schema = z.object({
-  biases: z
-    .array(
-      z.object({
-        name: z.enum([
-          "loss_aversion",
-          "hyperbolic_discounting",
-          "anchoring",
-          "sunk_cost",
-          "affect_heuristic",
-        ]),
-        fired: z.boolean(),
-        confidence: z.number().min(0).max(100),
-        evidence: z.string(),
-      })
-    )
-    .length(5),
+  biases: z.array(
+    z.object({
+      name: z.enum([
+        "loss_aversion",
+        "hyperbolic_discounting",
+        "anchoring",
+        "sunk_cost",
+        "affect_heuristic",
+      ]),
+      fired: z.boolean(),
+      confidence: z.number(),
+      evidence: z.string(),
+    })
+  ),
   summary: z.string(),
 });
 
@@ -43,6 +41,6 @@ export async function diagnose(
   return runStructured<DiagnoseResult>(prompt, schema, MOCK_DIAGNOSE, {
     systemPrompt: SYSTEM,
     temperature: 0.3,
-    maxOutputTokens: 600,
+    maxOutputTokens: 2500,
   });
 }

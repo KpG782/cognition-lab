@@ -59,6 +59,6 @@ Write a personalized intervention for THIS person. Return interventionName="${ch
 
   return runStructured<InterventionResult>(prompt, schema, MOCK_INTERVENTION, {
     temperature: 0.7,
-    maxOutputTokens: 300,
+    maxOutputTokens: 1800,
   });
 }
