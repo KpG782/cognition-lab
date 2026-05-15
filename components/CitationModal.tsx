@@ -25,7 +25,7 @@ export function CitationModal({
 
   if (!open) return null;
 
-  const entries = Object.values(CITATIONS);
+  const entries = Object.entries(CITATIONS);
 
   return (
     <div
@@ -51,8 +51,8 @@ export function CitationModal({
         </pre>
 
         <div className="mt-6 space-y-3 border-t border-neutral-200 pt-6 font-mono text-xs leading-relaxed text-neutral-600">
-          {entries.map((c) => (
-            <p key={c.paper}>
+          {entries.map(([key, c]) => (
+            <p key={key}>
               <span className="text-[#0A0A0A]">
                 {c.authors}, {c.year}.
               </span>{" "}

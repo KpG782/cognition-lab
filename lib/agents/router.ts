@@ -11,10 +11,11 @@ const MODE_ENUM = [
   "identity",
 ] as const;
 
+// Groq strict json_schema requires every property in `required` — no optionals,
+// and plain types (no min/max) to match the working diagnose schema.
 export const RouterSchema = z.object({
   primaryMode: z.enum(MODE_ENUM),
-  confidence: z.number().min(0).max(100),
-  secondaryMode: z.enum(MODE_ENUM).optional(),
+  confidence: z.number(),
   reasoning: z.string(),
 });
 

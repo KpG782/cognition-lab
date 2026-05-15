@@ -14,17 +14,35 @@ const PROTOCOL = [
   {
     n: "01",
     title: "Submit a decision",
-    body: "Each player logs one real purchase they're weighing — privately.",
+    body: "Each player logs one real purchase they're weighing — privately. No one sees your reasoning yet.",
   },
   {
     n: "02",
     title: "Diagnose a friend",
-    body: "You never analyze your own choice. You scan someone else's reasoning for bias.",
+    body: "You never analyze your own choice. You scan someone else's reasoning for bias — where it's actually visible.",
   },
   {
     n: "03",
-    title: "See the gap",
-    body: "Your self-assessment is set against how others — and the model — read you.",
+    title: "Measure the gap",
+    body: "Your self-assessment is set against how your friends — and the model — read you. The distance is the blind spot.",
+  },
+];
+
+// In-page navigation — anchors so the page is navigable, not a single scroll.
+const NAV = [
+  { id: "blind-spot", label: "Blind spot" },
+  { id: "modes", label: "Modes" },
+  { id: "protocol", label: "Protocol" },
+  { id: "research", label: "Research" },
+];
+
+// The research finding the page leads with — surfaced, not buried in a list.
+const PROOF = [
+  { stat: "2002", label: "blind-spot effect, replicated since" },
+  { stat: "~2.5×", label: "losses weighted over equal gains" },
+  {
+    stat: `${Object.values(CITATIONS).length}`,
+    label: "named, peer-reviewed citations",
   },
 ];
 
@@ -75,8 +93,110 @@ export default function Home() {
     }
   }
 
+  const PrimaryActions = (
+    <div className="mt-10">
+      {mode === "home" ? (
+        <div className="flex flex-wrap gap-3">
+          <Button
+            onClick={handleCreate}
+            disabled={busy}
+            className="h-11 cursor-pointer bg-[#1E3A8A] px-6 text-white transition-colors duration-200 hover:bg-[#1E3A8A]/90"
+          >
+            {busy ? "Opening room…" : "Create a room"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setMode("join")}
+            disabled={busy}
+            className="h-11 cursor-pointer px-6"
+          >
+            Join with a code
+          </Button>
+        </div>
+      ) : (
+        <div className="flex w-full flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <label htmlFor="room-code" className="sr-only">
+              Four-letter room code
+            </label>
+            <Input
+              id="room-code"
+              autoFocus
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === "Enter" && handleJoin()}
+              maxLength={4}
+              placeholder="CODE"
+              aria-invalid={!!error}
+              className="h-11 max-w-40 text-center font-mono text-lg uppercase tracking-[0.4em]"
+            />
+            <Button
+              onClick={handleJoin}
+              disabled={busy}
+              className="h-11 cursor-pointer bg-[#1E3A8A] px-6 text-white transition-colors duration-200 hover:bg-[#1E3A8A]/90"
+            >
+              Join
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setMode("home");
+                setError("");
+              }}
+              className="h-11 cursor-pointer"
+            >
+              Back
+            </Button>
+          </div>
+          {error && (
+            <p role="alert" className="text-sm text-[#DC2626]">
+              {error}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-[760px] flex-col px-6 py-16 sm:py-24">
+    <>
+      <header className="sticky top-0 z-40 border-b border-neutral-200 bg-white">
+        <nav
+          aria-label="Primary"
+          className="mx-auto flex h-14 max-w-[760px] items-center justify-between gap-4 px-6"
+        >
+          <a
+            href="#top"
+            className="font-mono text-xs font-semibold uppercase tracking-[0.25em] text-[#0A0A0A]"
+          >
+            Cognition Lab
+          </a>
+          <div className="hidden items-center gap-6 md:flex">
+            {NAV.map((n) => (
+              <a
+                key={n.id}
+                href={`#${n.id}`}
+                className="text-sm text-neutral-500 transition-colors duration-200 hover:text-[#0A0A0A]"
+              >
+                {n.label}
+              </a>
+            ))}
+          </div>
+          <Button
+            onClick={handleCreate}
+            disabled={busy}
+            className="h-9 cursor-pointer bg-[#1E3A8A] px-4 text-sm text-white transition-colors duration-200 hover:bg-[#1E3A8A]/90"
+          >
+            {busy ? "Opening…" : "Create a room"}
+          </Button>
+        </nav>
+      </header>
+
+      <main
+        id="top"
+        className="mx-auto flex min-h-screen max-w-[760px] flex-col px-6 pb-16 pt-12 sm:pb-24 sm:pt-16"
+      >
+      {/* Hero — the hook */}
       <div className="cl-fade-in">
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-neutral-500">
           Behavioral Economics Diagnostic
@@ -95,89 +215,93 @@ export default function Home() {
           Then you measure the distance between the two.
         </p>
 
-        {/* Primary action */}
-        <div className="mt-10">
-          {mode === "home" ? (
-            <div className="flex flex-wrap gap-3">
-              <Button
-                onClick={handleCreate}
-                disabled={busy}
-                className="h-11 cursor-pointer bg-[#1E3A8A] px-6 text-white transition-colors duration-200 hover:bg-[#1E3A8A]/90"
-              >
-                {busy ? "Opening room…" : "Create a room"}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setMode("join")}
-                disabled={busy}
-                className="h-11 cursor-pointer px-6"
-              >
-                Join with a code
-              </Button>
+        <p className="mt-4 max-w-[52ch] text-sm leading-relaxed text-neutral-500">
+          Open a room, share the 4-letter code, and log one real purchase
+          you&apos;re weighing. Takes about five minutes with two people.
+        </p>
+
+        {PrimaryActions}
+
+        {/* Proof bar — credibility surfaced, not buried */}
+        <dl className="mt-12 grid grid-cols-3 gap-px border border-neutral-200 bg-neutral-200">
+          {PROOF.map((p) => (
+            <div key={p.label} className="bg-white px-4 py-5">
+              <dt className="font-mono text-xl font-semibold text-[#0A0A0A] sm:text-2xl">
+                {p.stat}
+              </dt>
+              <dd className="mt-1 text-xs leading-snug text-neutral-500">
+                {p.label}
+              </dd>
             </div>
-          ) : (
-            <div className="flex w-full flex-col gap-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <label htmlFor="room-code" className="sr-only">
-                  Four-letter room code
-                </label>
-                <Input
-                  id="room-code"
-                  autoFocus
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
-                  onKeyDown={(e) => e.key === "Enter" && handleJoin()}
-                  maxLength={4}
-                  placeholder="CODE"
-                  aria-invalid={!!error}
-                  className="h-11 max-w-40 text-center font-mono text-lg uppercase tracking-[0.4em]"
-                />
-                <Button
-                  onClick={handleJoin}
-                  disabled={busy}
-                  className="h-11 cursor-pointer bg-[#1E3A8A] px-6 text-white transition-colors duration-200 hover:bg-[#1E3A8A]/90"
-                >
-                  Join
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setMode("home");
-                    setError("");
-                  }}
-                  className="h-11 cursor-pointer"
-                >
-                  Back
-                </Button>
-              </div>
-              {error && (
-                <p role="alert" className="text-sm text-[#DC2626]">
-                  {error}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
+          ))}
+        </dl>
       </div>
 
-      <ModeShowcase onSelect={handleSelectMode} />
-
-      {/* Protocol — operationalizes the moat */}
+      {/* The blind spot — operationalizes the moat, visually */}
       <section
-        className="cl-fade-in mt-20 border-t border-neutral-200 pt-12"
+        id="blind-spot"
+        className="cl-fade-in mt-16 scroll-mt-20 border-t border-neutral-200 pt-12"
+        aria-label="Why diagnose each other"
+      >
+        <h2 className="font-mono text-xs uppercase tracking-[0.25em] text-neutral-500">
+          The blind spot
+        </h2>
+        <div className="mt-8 grid gap-px border border-neutral-200 bg-neutral-200 sm:grid-cols-2">
+          <div className="bg-white p-6">
+            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-400">
+              Diagnosing yourself
+            </p>
+            <p className="mt-3 text-base leading-relaxed text-neutral-700">
+              &ldquo;I thought it through. My reasons are sound.&rdquo; The flaw
+              is recursive — you can&apos;t introspect your way out of a flaw in
+              introspection.
+            </p>
+          </div>
+          <div className="bg-white p-6">
+            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#1E3A8A]">
+              Diagnosed by others
+            </p>
+            <p className="mt-3 text-base leading-relaxed text-neutral-700">
+              A friend — and the model — read the same reasoning from the
+              outside, where the bias is plainly visible. That asymmetry is the
+              entire instrument.
+            </p>
+          </div>
+        </div>
+        <p className="mt-4 font-mono text-xs italic text-neutral-400">
+          Pronin, Lin &amp; Ross (2002) — the effect holds even when subjects
+          are shown direct evidence of their own bias.
+        </p>
+      </section>
+
+      <div id="modes" className="scroll-mt-20">
+        <ModeShowcase onSelect={handleSelectMode} />
+      </div>
+
+      {/* Protocol — the sequence, read as steps not paragraphs */}
+      <section
+        id="protocol"
+        className="cl-fade-in mt-16 scroll-mt-20 border-t border-neutral-200 pt-12"
         aria-label="How the diagnostic works"
       >
         <h2 className="font-mono text-xs uppercase tracking-[0.25em] text-neutral-500">
           The Protocol
         </h2>
-        <ol className="mt-8 grid gap-10 sm:grid-cols-3 sm:gap-8">
+        <ol className="mt-8 space-y-px border border-neutral-200 bg-neutral-200">
           {PROTOCOL.map((step) => (
-            <li key={step.n}>
-              <p className="font-mono text-sm text-[#1E3A8A]">{step.n}</p>
-              <h3 className="mt-3 text-base font-semibold">{step.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-neutral-600">
-                {step.body}
+            <li
+              key={step.n}
+              className="flex gap-5 bg-white p-6 sm:gap-8 sm:p-7"
+            >
+              <p className="shrink-0 font-mono text-sm text-[#1E3A8A]">
+                {step.n}
               </p>
+              <div>
+                <h3 className="text-base font-semibold">{step.title}</h3>
+                <p className="mt-1.5 max-w-[58ch] text-sm leading-relaxed text-neutral-600">
+                  {step.body}
+                </p>
+              </div>
             </li>
           ))}
         </ol>
@@ -185,14 +309,16 @@ export default function Home() {
 
       {/* Research foundation — the visible research is a hard requirement */}
       <section
-        className="cl-fade-in mt-16 border-t border-neutral-200 pt-12"
+        id="research"
+        className="cl-fade-in mt-16 scroll-mt-20 border-t border-neutral-200 pt-12"
         aria-label="Research foundation"
       >
         <h2 className="font-mono text-xs uppercase tracking-[0.25em] text-neutral-500">
           Grounded in the literature
         </h2>
         <p className="mt-4 max-w-[58ch] text-sm leading-relaxed text-neutral-600">
-          Every diagnosis cites named, peer-reviewed findings — not vibes.
+          Every diagnosis cites named, peer-reviewed findings — not vibes. A
+          sample of the registry:
         </p>
         <div className="mt-6 space-y-1.5 font-mono text-xs text-neutral-500">
           {Object.values(CITATIONS)
@@ -210,6 +336,18 @@ export default function Home() {
             registry
           </button>
         </div>
+      </section>
+
+      {/* Climax CTA — the page ends on the action */}
+      <section className="cl-fade-in mt-16 border-t border-neutral-200 pt-12">
+        <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          Find the bias you can&apos;t see.
+        </h2>
+        <p className="mt-3 max-w-[52ch] text-sm leading-relaxed text-neutral-600">
+          Pull in one friend, log a decision each, and let the instrument
+          measure what introspection hides.
+        </p>
+        {PrimaryActions}
       </section>
 
       <footer className="mt-auto flex items-center justify-between pt-20">
@@ -278,6 +416,7 @@ export default function Home() {
       )}
 
       <CitationModal open={citations} onClose={() => setCitations(false)} />
-    </main>
+      </main>
+    </>
   );
 }
