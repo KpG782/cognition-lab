@@ -4,8 +4,8 @@ import { MOCK_DIAGNOSE } from "@/lib/mocks";
 
 export async function POST(req: NextRequest) {
   try {
-    const { decisionText, price } = await req.json();
-    const result = await diagnose(decisionText ?? "", price ?? null);
+    const { decisionText, price, mode } = await req.json();
+    const result = await diagnose(decisionText ?? "", price ?? null, mode ?? "spend");
     return NextResponse.json(result);
   } catch {
     return NextResponse.json(MOCK_DIAGNOSE);
