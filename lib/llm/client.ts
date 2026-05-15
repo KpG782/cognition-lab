@@ -1,9 +1,9 @@
 import { generateObject, generateText } from "ai";
-import { google } from "@ai-sdk/google";
+import { groq } from "@ai-sdk/groq";
 import type { z } from "zod";
 
 // Single config point. Swap providers here (e.g. anthropic('claude-...')) — nothing else changes.
-const MODEL = google("gemini-2.5-flash");
+const MODEL = groq("openai/gpt-oss-120b");
 
 interface GenOptions {
   systemPrompt?: string;
