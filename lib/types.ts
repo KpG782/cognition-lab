@@ -1,3 +1,6 @@
+import type { ModeKey } from "./modes";
+
+// Closed union retained for the typed Spend intervention selector.
 export type BiasName =
   | "loss_aversion"
   | "hyperbolic_discounting"
@@ -6,7 +9,8 @@ export type BiasName =
   | "affect_heuristic";
 
 export interface BiasResult {
-  name: BiasName;
+  // Scanners vary per mode, so this is an open string keyed off the mode registry.
+  name: string;
   fired: boolean;
   confidence: number; // 0-100
   evidence: string;
@@ -40,6 +44,7 @@ export interface Player {
 export interface RoomStateData {
   phase: RoomPhase;
   players: Player[];
+  mode?: ModeKey;
 }
 
 export interface Submission {
@@ -49,6 +54,7 @@ export interface Submission {
   player_name: string;
   decision_text: string;
   price: number | null;
+  mode: ModeKey;
   created_at: string;
 }
 
@@ -73,10 +79,20 @@ export interface AIDiagnosisContent {
   council: CouncilResult;
 }
 
-export const BIAS_LABELS: Record<BiasName, string> = {
+export const BIAS_LABELS: Record<string, string> = {
   loss_aversion: "Loss Aversion",
   hyperbolic_discounting: "Hyperbolic Discounting",
   anchoring: "Anchoring",
   sunk_cost: "Sunk Cost",
   affect_heuristic: "Affect Heuristic",
 };
+
+/** Human label for any scanner name — known ones from BIAS_LABELS, else title-cased. */
+export function scannerLabel(name: string): string {
+  return (
+    BIAS_LABELS[name] ??
+    name
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+  );
+}

@@ -11,10 +11,12 @@ const schema = z.object({
 });
 
 // Deterministic selector — NOT an LLM decision.
-const SELECTOR: Record<
-  BiasName,
-  { name: string; citation: string }
-> = {
+const DEFAULT_CHOICE = {
+  name: "Temporal Self-Distancing",
+  citation: "Kross & Ayduk, 2011",
+};
+
+const SELECTOR: Record<string, { name: string; citation: string }> = {
   hyperbolic_discounting: {
     name: "Implementation Intention",
     citation: "Gollwitzer, 1999",
@@ -35,6 +37,18 @@ const SELECTOR: Record<
     name: "Temporal Self-Distancing",
     citation: "Kross & Ayduk, 2011",
   },
+  reactance: {
+    name: "Frankl Pause",
+    citation: "Frankl, 1946",
+  },
+  projection: {
+    name: "Jungian Shadow Mirror",
+    citation: "Jung, 1951",
+  },
+  fundamental_attribution: {
+    name: "Perspective-Taking",
+    citation: "Ross, 1977",
+  },
 };
 
 export function topBias(d: DiagnoseResult) {
@@ -50,7 +64,7 @@ export async function intervene(
   const top = topBias(d);
   if (!top) return MOCK_INTERVENTION;
 
-  const choice = SELECTOR[top.name];
+  const choice = SELECTOR[top.name] ?? DEFAULT_CHOICE;
   const prompt = `The person's decision: "${decisionText}"
 Dominant bias: ${top.name} (confidence ${top.confidence}).
 Evidence: ${top.evidence}
