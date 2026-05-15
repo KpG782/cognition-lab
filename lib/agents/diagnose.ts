@@ -56,7 +56,8 @@ const CITATION_ALIASES: Record<string, string> = {
 function buildSystem(mode: ModeKey): string {
   if (mode === "spend" || mode === "mirror") return SPEND_SYSTEM;
 
-  const scanners = MODES[mode].scanners.filter((s) => s !== "all");
+  // spend/mirror already returned above; remaining modes have concrete scanners.
+  const scanners = MODES[mode].scanners as readonly string[];
   const lines = scanners.map((s) => {
     const key = CITATION_ALIASES[s] as keyof typeof CITATIONS | undefined;
     const c = key ? CITATIONS[key] : undefined;
