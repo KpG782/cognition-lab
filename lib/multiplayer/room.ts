@@ -10,6 +10,7 @@ import type {
   RoomPhase,
   Player,
 } from "../types";
+import type { ModeKey } from "../modes";
 
 const roomCode = customAlphabet("ABCDEFGHJKLMNPQRSTUVWXYZ", 4);
 const idGen = customAlphabet(
@@ -29,14 +30,29 @@ export function getPlayerId(): string {
   return id;
 }
 
-const EMPTY_STATE: RoomStateData = { phase: "lobby", players: [] };
+const EMPTY_STATE: RoomStateData = {
+  phase: "lobby",
+  players: [],
+  mode: "spend",
+};
 
-export async function createRoom(): Promise<string> {
+export async function createRoom(mode: ModeKey = "spend"): Promise<string> {
   const code = roomCode();
   await supabase
     .from("rooms")
-    .insert({ id: code, state: EMPTY_STATE });
+    .insert({ id: code, state: { ...EMPTY_STATE, mode } });
   return code;
+}
+
+export async function setRoomMode(
+  code: string,
+  mode: ModeKey
+): Promise<void> {
+  const state = await getRoomState(code);
+  await supabase
+    .from("rooms")
+    .update({ state: { ...state, mode } })
+    .eq("id", code);
 }
 
 export async function joinRoom(code: string): Promise<boolean> {
@@ -82,9 +98,10 @@ export async function setPhase(
 }
 
 export async function resetRoom(code: string): Promise<void> {
+  const state = await getRoomState(code);
   await supabase
     .from("rooms")
-    .update({ state: { ...EMPTY_STATE } })
+    .update({ state: { ...EMPTY_STATE, mode: state.mode ?? "spend" } })
     .eq("id", code);
 }
 

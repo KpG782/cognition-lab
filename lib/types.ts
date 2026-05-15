@@ -54,7 +54,8 @@ export interface Submission {
   player_name: string;
   decision_text: string;
   price: number | null;
-  mode: ModeKey;
+  // Not a DB column — mode is carried at room level (rooms.state.mode).
+  mode?: ModeKey;
   created_at: string;
 }
 
