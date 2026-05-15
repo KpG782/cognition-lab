@@ -3,7 +3,7 @@ import { groq } from "@ai-sdk/groq";
 import type { z } from "zod";
 
 // Single config point. Swap providers here (e.g. anthropic('claude-...')) — nothing else changes.
-const MODEL = groq("openai/gpt-oss-120b");
+const MODEL = groq("llama-3.3-70b-versatile");
 
 interface GenOptions {
   systemPrompt?: string;
