@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createRoom, joinRoom } from "@/lib/multiplayer/room";
 import { CITATIONS } from "@/lib/citations";
+import { ModeShowcase } from "@/components/ModeShowcase";
+import { CitationModal } from "@/components/CitationModal";
+import type { ModeKey } from "@/lib/modes";
 
 const PROTOCOL = [
   {
@@ -32,6 +35,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [about, setAbout] = useState(false);
+  const [citations, setCitations] = useState(false);
 
   useEffect(() => {
     if (!about) return;
@@ -44,7 +48,13 @@ export default function Home() {
 
   async function handleCreate() {
     setBusy(true);
-    const c = await createRoom();
+    const c = await createRoom("spend");
+    router.push(`/room/${c}`);
+  }
+
+  async function handleSelectMode(m: ModeKey) {
+    setBusy(true);
+    const c = await createRoom(m);
     router.push(`/room/${c}`);
   }
 
@@ -150,6 +160,8 @@ export default function Home() {
         </div>
       </div>
 
+      <ModeShowcase onSelect={handleSelectMode} />
+
       {/* Protocol — operationalizes the moat */}
       <section
         className="cl-fade-in mt-20 border-t border-neutral-200 pt-12"
@@ -190,10 +202,13 @@ export default function Home() {
                 {c.authors} ({c.year}) — {c.paper}.
               </p>
             ))}
-          <p className="text-neutral-400">
+          <button
+            onClick={() => setCitations(true)}
+            className="cursor-pointer text-neutral-400 underline underline-offset-4 transition-colors duration-200 hover:text-[#0A0A0A]"
+          >
             + {Object.values(CITATIONS).length - 4} more in the citation
             registry
-          </p>
+          </button>
         </div>
       </section>
 
@@ -240,23 +255,29 @@ export default function Home() {
               algorithm — observe your reasoning from the outside, where the
               bias is visible.
             </p>
-            <div className="mt-6 space-y-2 border-t border-neutral-200 pt-6 font-mono text-xs text-neutral-500">
-              {Object.values(CITATIONS).map((c) => (
-                <p key={c.paper}>
-                  {c.authors}, {c.year}. {c.paper}.
-                </p>
-              ))}
+            <div className="mt-6 flex flex-wrap gap-3 border-t border-neutral-200 pt-6">
+              <Button
+                className="h-11 cursor-pointer bg-[#1E3A8A] px-6 text-white transition-colors duration-200 hover:bg-[#1E3A8A]/90"
+                onClick={() => {
+                  setAbout(false);
+                  setCitations(true);
+                }}
+              >
+                View all {Object.values(CITATIONS).length} citations
+              </Button>
+              <Button
+                variant="outline"
+                className="h-11 cursor-pointer px-6"
+                onClick={() => setAbout(false)}
+              >
+                Close
+              </Button>
             </div>
-            <Button
-              variant="outline"
-              className="mt-6 h-11 cursor-pointer px-6"
-              onClick={() => setAbout(false)}
-            >
-              Close
-            </Button>
           </div>
         </div>
       )}
+
+      <CitationModal open={citations} onClose={() => setCitations(false)} />
     </main>
   );
 }
