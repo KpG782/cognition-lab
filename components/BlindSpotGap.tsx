@@ -1,7 +1,6 @@
 "use client";
 
-import { BIAS_LABELS } from "@/lib/types";
-import type { BiasName } from "@/lib/types";
+import { scannerLabel } from "@/lib/types";
 
 export function BlindSpotGap({
   selfMotive,
@@ -10,7 +9,7 @@ export function BlindSpotGap({
   gap,
 }: {
   selfMotive: string;
-  aiBias: BiasName | null;
+  aiBias: string | null;
   friendsTheme: string;
   gap: "HIGH" | "MEDIUM" | "LOW";
 }) {
@@ -26,7 +25,7 @@ export function BlindSpotGap({
         </p>
         <p>
           <span className="text-neutral-500">AI saw: </span>
-          {aiBias ? BIAS_LABELS[aiBias] : "no strong bias"}
+          {aiBias ? scannerLabel(aiBias) : "no strong bias"}
         </p>
         <p>
           <span className="text-neutral-500">Friends saw: </span>

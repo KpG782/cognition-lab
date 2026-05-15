@@ -3,7 +3,7 @@ import { runStructured } from "../llm/client";
 import { MOCK_DIAGNOSE, MOCK_DIAGNOSE_REPLY } from "../mocks";
 import type { DiagnoseResult } from "../types";
 import { MODES, type ModeKey } from "../modes";
-import { CITATIONS } from "../citations";
+import { getScannerCitation } from "../citations";
 import { scannerLabel } from "../types";
 
 const schema = z.object({
@@ -29,38 +29,13 @@ const SPEND_SYSTEM = `You are a behavioral economics diagnostic engine. Given a 
 
 Return exactly 5 bias entries. Be calibrated: only mark fired=true with confidence above 55 when the text genuinely supports it. Keep the summary to one sentence.`;
 
-// Best-effort scanner name -> citation key resolution for dynamic prompts.
-const CITATION_ALIASES: Record<string, string> = {
-  projection: "projection_shadow",
-  reactance: "reactance",
-  fundamental_attribution: "fundamental_attribution",
-  affect_heuristic: "affect_heuristic",
-  loss_aversion: "loss_aversion",
-  hyperbolic_discounting: "hyperbolic_discounting",
-  anchoring: "anchoring",
-  sunk_cost: "sunk_cost",
-  status_quo_bias: "status_quo_bias",
-  optionality_paralysis: "optionality_paralysis",
-  reciprocity: "cialdini_reciprocity",
-  commitment_consistency: "cialdini_commitment_consistency",
-  social_proof: "cialdini_social_proof",
-  liking: "cialdini_liking",
-  authority: "cialdini_authority",
-  scarcity: "cialdini_scarcity",
-  unity: "cialdini_unity",
-  identity_behavior_mismatch: "atomic_habits_identity",
-  fixed_mindset_drift: "growth_mindset",
-  narrative_incoherence: "narrative_identity",
-};
-
 function buildSystem(mode: ModeKey): string {
   if (mode === "spend" || mode === "mirror") return SPEND_SYSTEM;
 
   // spend/mirror already returned above; remaining modes have concrete scanners.
   const scanners = MODES[mode].scanners as readonly string[];
   const lines = scanners.map((s) => {
-    const key = CITATION_ALIASES[s] as keyof typeof CITATIONS | undefined;
-    const c = key ? CITATIONS[key] : undefined;
+    const c = getScannerCitation(s);
     const def = c
       ? `${c.authors}, ${c.year}: ${c.finding}`
       : "evaluate from context.";

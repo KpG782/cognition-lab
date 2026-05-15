@@ -238,3 +238,29 @@ export function formatCitation(key: CitationKey): string {
   const c = CITATIONS[key];
   return `${c.authors}, ${c.year}`;
 }
+
+export type CitationEntry = (typeof CITATIONS)[CitationKey];
+
+// Maps a mode scanner name to its citation key when they differ.
+const SCANNER_TO_CITATION: Record<string, CitationKey> = {
+  projection: "projection_shadow",
+  reciprocity: "cialdini_reciprocity",
+  commitment_consistency: "cialdini_commitment_consistency",
+  social_proof: "cialdini_social_proof",
+  liking: "cialdini_liking",
+  authority: "cialdini_authority",
+  scarcity: "cialdini_scarcity",
+  unity: "cialdini_unity",
+  identity_behavior_mismatch: "atomic_habits_identity",
+  fixed_mindset_drift: "growth_mindset",
+  narrative_incoherence: "narrative_identity",
+};
+
+/** Resolve a scanner name to a citation entry, or undefined if none maps. */
+export function getScannerCitation(
+  scanner: string
+): CitationEntry | undefined {
+  if (scanner in CITATIONS) return CITATIONS[scanner as CitationKey];
+  const mapped = SCANNER_TO_CITATION[scanner];
+  return mapped ? CITATIONS[mapped] : undefined;
+}

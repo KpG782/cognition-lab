@@ -10,11 +10,13 @@ import { BlindDiagnosisPanel } from "@/components/BlindDiagnosisPanel";
 import { BiasCard } from "@/components/BiasCard";
 import { CouncilVote } from "@/components/CouncilVote";
 import { BlindSpotGap } from "@/components/BlindSpotGap";
+import { ModeTabs } from "@/components/ModeTabs";
 import {
   getPlayerId,
   getRoomState,
   addPlayer,
   setPhase,
+  setRoomMode,
   resetRoom,
   submitDecision,
   submitHumanDiagnosis,
@@ -23,6 +25,7 @@ import {
   fetchDiagnoses,
   subscribeToRoom,
 } from "@/lib/multiplayer/room";
+import { MODES, type ModeKey } from "@/lib/modes";
 import { useSession } from "@/store/session-store";
 import type {
   RoomStateData,
@@ -31,7 +34,6 @@ import type {
   AIDiagnosisContent,
   HumanDiagnosisContent,
   DiagnoseResult,
-  BiasName,
 } from "@/lib/types";
 
 export default function RoomPage({
@@ -53,7 +55,10 @@ export default function RoomPage({
   });
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
+  const [routerHint, setRouterHint] = useState<ModeKey | null>(null);
+  const [hintDismissed, setHintDismissed] = useState(false);
   const aiRunning = useRef(false);
+  const routerRan = useRef(false);
 
   if (!playerId.current && typeof window !== "undefined") {
     playerId.current = getPlayerId();
@@ -82,6 +87,32 @@ export default function RoomPage({
 
   const isHost = state.players[0]?.id === playerId.current;
   const playerCount = state.players.length;
+  const mode: ModeKey = state.mode ?? "spend";
+
+  const mySubmission = submissions.find(
+    (s) => s.player_id === playerId.current
+  );
+
+  // Non-forcing router check on the local player's submission.
+  useEffect(() => {
+    if (state.phase !== "submit" || mode === "mirror") return;
+    if (!mySubmission || routerRan.current) return;
+    routerRan.current = true;
+    (async () => {
+      try {
+        const r = await fetch("/api/route", {
+          method: "POST",
+          body: JSON.stringify({ input: mySubmission.decision_text }),
+        });
+        const { primaryMode } = await r.json();
+        if (primaryMode && primaryMode !== mode) {
+          setRouterHint(primaryMode as ModeKey);
+        }
+      } catch {
+        /* router is advisory only */
+      }
+    })();
+  }, [state.phase, mode, mySubmission]);
 
   const humanDiagnoses = diagnoses.filter(
     (d) => d.diagnoser_type === "human"
@@ -105,6 +136,7 @@ export default function RoomPage({
             body: JSON.stringify({
               decisionText: s.decision_text,
               price: s.price,
+              mode,
             }),
           });
           const diagnose: DiagnoseResult = await dRes.json();
@@ -136,7 +168,7 @@ export default function RoomPage({
       aiRunning.current = false;
       await refetch();
     })();
-  }, [isHost, state.phase, submissions, aiDiagnoses, refetch]);
+  }, [isHost, state.phase, submissions, aiDiagnoses, refetch, mode]);
 
   // Auto-advance logic (any client may push the phase forward; idempotent)
   useEffect(() => {
@@ -206,12 +238,59 @@ export default function RoomPage({
 
   return (
     <main className="mx-auto min-h-screen max-w-[720px] px-6 py-12 md:max-w-[960px]">
-      <header className="mb-10 flex items-baseline justify-between border-b border-neutral-200 pb-4">
+      <header className="mb-6 flex items-baseline justify-between border-b border-neutral-200 pb-4">
         <span className="text-lg font-semibold">Cognition Lab</span>
         <span className="font-mono text-sm text-neutral-500">
-          room {code} · {state.phase}
+          {MODES[mode].label} · room {code} · {state.phase}
         </span>
       </header>
+
+      <div className="mb-10">
+        <ModeTabs
+          current={mode}
+          onSwitch={async (m) => {
+            if (m === mode || state.phase !== "lobby") return;
+            await setRoomMode(code, m);
+            await refetch();
+          }}
+        />
+        {state.phase !== "lobby" && (
+          <p className="mt-2 font-mono text-[11px] text-neutral-400">
+            Mode locks once the session starts.
+          </p>
+        )}
+      </div>
+
+      {routerHint && !hintDismissed && state.phase === "submit" && (
+        <div className="mb-8 flex flex-wrap items-center gap-3 border border-[#1E3A8A]/30 bg-[#1E3A8A]/5 px-4 py-3 text-sm">
+          <span className="text-neutral-700">
+            Your input looks like{" "}
+            <strong>{MODES[routerHint].label}</strong>. Continue in{" "}
+            {MODES[mode].label} or switch?
+          </span>
+          <div className="flex gap-2">
+            {isHost && (
+              <Button
+                className="h-8 cursor-pointer bg-[#1E3A8A] px-3 text-xs text-white hover:bg-[#1E3A8A]/90"
+                onClick={async () => {
+                  await setRoomMode(code, routerHint);
+                  setRouterHint(null);
+                  await refetch();
+                }}
+              >
+                Switch to {MODES[routerHint].label}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              className="h-8 cursor-pointer px-3 text-xs"
+              onClick={() => setHintDismissed(true)}
+            >
+              Continue
+            </Button>
+          </div>
+        </div>
+      )}
 
       {state.phase === "lobby" && (
         <RoomLobby
@@ -225,6 +304,8 @@ export default function RoomPage({
         <DecisionInput
           lockedCount={submissions.length}
           totalCount={playerCount}
+          promptHint={MODES[mode].promptHint}
+          showPrice={mode === "spend"}
           onLock={(text, price) =>
             submitDecision(code, playerId.current, playerName, text, price)
           }
@@ -269,7 +350,7 @@ export default function RoomPage({
                 <p className="mb-3 font-medium">{s.player_name}</p>
                 <BlindSpotGap
                   selfMotive={s.decision_text}
-                  aiBias={(top?.name as BiasName) ?? null}
+                  aiBias={top?.name ?? null}
                   friendsTheme={friends[0] ?? ""}
                   gap={gap}
                 />
