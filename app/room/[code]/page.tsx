@@ -92,6 +92,7 @@ function ObserverGuest({ code }: { code: string }) {
   const [hostId, setHostId] = useState<string | null>(null);
   const [hostName, setHostName] = useState("your friend");
   const [done, setDone] = useState(false);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -175,11 +176,17 @@ function ObserverGuest({ code }: { code: string }) {
       <ObserverForm
         subjectName={hostName}
         onDone={async (responses) => {
-          await submitResponseSet(code, guestId(), name.trim(), {
-            kind: "observer",
-            subjectId: hostId ?? "host",
-            responses,
-          });
+          if (submittingRef.current) return;
+          submittingRef.current = true;
+          try {
+            await submitResponseSet(code, guestId(), name.trim(), {
+              kind: "observer",
+              subjectId: hostId ?? "host",
+              responses,
+            });
+          } catch (err) {
+            console.error("observer submit failed", err);
+          }
           setDone(true);
         }}
       />
@@ -224,6 +231,7 @@ function RoomHost({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
   const narrativeRan = useRef(false);
   const observerRequested = useRef(false);
+  const submittingRef = useRef(false);
 
   const refetch = useCallback(async () => {
     const s = await getRoomState(code);
@@ -384,13 +392,20 @@ function RoomHost({ code }: { code: string }) {
 
       {phase === "test" && (
         <Questionnaire
-          onDone={(r) => {
+          onDone={async (r) => {
+            if (submittingRef.current) return;
+            submittingRef.current = true;
             setResponses(r);
-            submitResponseSet(code, playerId.current, playerName, {
-              kind: "self",
-              subjectId: playerId.current,
-              responses: r,
-            });
+            try {
+              await submitResponseSet(code, playerId.current, playerName, {
+                kind: "self",
+                subjectId: playerId.current,
+                responses: r,
+              });
+            } catch (err) {
+              console.error("self submit failed", err);
+            }
+            submittingRef.current = false;
             setLocalPhase("predict");
           }}
         />
@@ -458,7 +473,6 @@ function RoomHost({ code }: { code: string }) {
           observed={observed}
           solo={solo}
           code={code5}
-          scores={selfScores}
           onRestart={async () => {
             reset();
             try {
@@ -466,6 +480,9 @@ function RoomHost({ code }: { code: string }) {
             } catch {
               /* solo room teardown is best-effort */
             }
+            narrativeRan.current = false;
+            observerRequested.current = false;
+            submittingRef.current = false;
             setLocalPhase("intro");
           }}
         />
@@ -595,14 +612,12 @@ function BlindSpotPhase({
   observed,
   solo,
   code,
-  scores,
   onRestart,
 }: {
   prediction: Record<string, number>;
   observed: TraitScores;
   solo: boolean;
   code: string;
-  scores: TraitScores | null;
   onRestart: () => void;
 }) {
   const bs = useMemo(
@@ -621,7 +636,6 @@ function BlindSpotPhase({
           `${p.trait}: predicted ${p.predicted}, observed ${p.observed} (gap ${p.gap}, ${p.band})`
       ),
     ];
-    void scores;
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
       setCopied(true);

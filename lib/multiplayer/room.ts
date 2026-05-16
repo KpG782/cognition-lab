@@ -278,7 +278,7 @@ export async function fetchDiagnoses(
 }
 
 /**
- * Subscribes to room state, submissions and diagnoses changes.
+ * Subscribes to room state and submissions changes.
  * Fires `onChange` on any relevant insert/update so the caller can refetch.
  */
 export function subscribeToRoom(
@@ -300,11 +300,6 @@ export function subscribeToRoom(
         table: "submissions",
         filter: `room_id=eq.${roomCode}`,
       },
-      onChange
-    )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "diagnoses" },
       onChange
     )
     .subscribe();
