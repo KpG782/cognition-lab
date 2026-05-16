@@ -304,6 +304,8 @@ export const MOCK_ROUTER = {
     "Mock fallback classification — input mentions a purchase decision.",
 };
 
+export const OBSERVER_MOCK = { O: 60, C: 55, E: 65, A: 70, N: 45 };
+
 // ---- Solo mode confederate ----
 // Fixed peer identity that fills the second seat when a player is alone.
 // The confederate submits its own seeded decision AND reads the real

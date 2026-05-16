@@ -1,29 +1,37 @@
-import { runText } from "../llm/client";
-import { CONFEDERATE_READS } from "../mocks";
-import type { ModeKey } from "../modes";
+import { z } from "zod";
+import { runStructured } from "../llm/client";
+import { TRAITS, type TraitScores, type Responses } from "../bigfive";
+import { OBSERVER_MOCK } from "../mocks";
 
-// Deliberately NOT the diagnose engine: this must read as a blunt friend
-// texting back, never a clinical scanner — that contrast is the whole point
-// of keeping a human "friend" column distinct from the algorithm column.
-const PEER_SYSTEM = `You are texting a close friend back about a decision they just told you. You are NOT a therapist, coach, or analyst. One or two sentences. Casual, second person ("you"), a little blunt, no jargon, no bias names, no bullet points, no preamble. Say what you think is *really* driving them — the thing they probably can't see in themselves.`;
+export const ObserverSchema = z.object({
+  O: z.number(),
+  C: z.number(),
+  E: z.number(),
+  A: z.number(),
+  N: z.number(),
+});
 
-function bankRead(mode: ModeKey): string {
-  const bank = CONFEDERATE_READS[mode] ?? CONFEDERATE_READS.spend;
-  return bank[Math.floor(Math.random() * bank.length)];
-}
+const SYSTEM = `You estimate how a person comes across to someone who has just observed them, on the Big Five. Output ONLY five integers 0-100 (O,C,E,A,N) as the percentile each trait would read at to an outside observer. Base it strictly on the evidence given. Be decisive.`;
 
-export async function confederateRead(
-  decisionText: string,
-  mode: ModeKey = "spend"
-): Promise<string> {
-  const fallback = bankRead(mode);
-  const prompt = `Your friend just said: "${decisionText}"\n\nText back your honest read of what's really going on with them.`;
-  // gpt-oss is a reasoning model — give it room or reasoning eats the budget
-  // and returns empty. runText only falls back on throw, so guard empty too.
-  const out = await runText(prompt, fallback, {
-    systemPrompt: PEER_SYSTEM,
-    temperature: 0.8,
-    maxOutputTokens: 900,
+// Solo path only. Clearly an AI estimate from the user's own words —
+// the friend observer form is the real measurement.
+export async function aiObserverEstimate(
+  selfResponses: Responses,
+  situation?: string
+): Promise<TraitScores> {
+  const fallback: TraitScores = OBSERVER_MOCK as TraitScores;
+  const answered = Object.entries(selfResponses)
+    .map(([k, v]) => `${k}:${v}`)
+    .join(" ");
+  const prompt = `Self-report answers (1-5): ${answered}\nRecent situation they described: ${
+    situation || "(none given)"
+  }\nEstimate observer-perceived percentiles.`;
+  const r = await runStructured(prompt, ObserverSchema, fallback, {
+    systemPrompt: SYSTEM,
+    temperature: 0.4,
+    maxOutputTokens: 200,
   });
-  return out.trim() || fallback;
+  const out = {} as TraitScores;
+  for (const t of TRAITS) out[t] = Math.max(0, Math.min(100, Math.round(r[t] ?? 50)));
+  return out;
 }
