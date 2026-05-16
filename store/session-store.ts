@@ -1,18 +1,11 @@
 import { create } from "zustand";
-
-type Phase =
-  | "intro"
-  | "test"
-  | "predict"
-  | "result"
-  | "await_observer"
-  | "blindspot";
+import type { RoomPhase } from "@/lib/types";
 
 interface SessionState {
   playerName: string;
   setPlayerName: (name: string) => void;
-  phase: Phase;
-  setPhase: (phase: Phase) => void;
+  phase: RoomPhase;
+  setPhase: (phase: RoomPhase) => void;
   solo: boolean;
   setSolo: (v: boolean) => void;
   myDecisionLocked: boolean;
