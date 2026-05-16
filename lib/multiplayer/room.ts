@@ -45,7 +45,7 @@ export async function createRoom(): Promise<string> {
     .from("rooms")
     .insert({
       id: code,
-      state: { mode: "looking_glass", phase: "intro" },
+      state: { ...EMPTY_STATE },
     });
   return code;
 }
@@ -65,7 +65,10 @@ export async function getRoomState(code: string): Promise<RoomStateData> {
     .select("state")
     .eq("id", code)
     .maybeSingle();
-  return (data?.state as RoomStateData) ?? EMPTY_STATE;
+  // Rooms persisted before this normalization (or any partial write) may
+  // lack `players`; merge over defaults so every consumer is safe.
+  const raw = (data?.state as Partial<RoomStateData> | undefined) ?? {};
+  return { ...EMPTY_STATE, ...raw, players: raw.players ?? [] };
 }
 
 export async function addPlayer(

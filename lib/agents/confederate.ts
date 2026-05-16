@@ -29,7 +29,10 @@ export async function aiObserverEstimate(
   const r = await runStructured(prompt, ObserverSchema, fallback, {
     systemPrompt: SYSTEM,
     temperature: 0.4,
-    maxOutputTokens: 200,
+    // gpt-oss-120b reasoning eats small caps before emitting JSON; needs a
+    // large budget even for a 5-number result. See memory:
+    // groq-structured-output-constraints.
+    maxOutputTokens: 1500,
   });
   const out = {} as TraitScores;
   for (const t of TRAITS) out[t] = Math.max(0, Math.min(100, Math.round(r[t] ?? 50)));

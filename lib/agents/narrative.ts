@@ -41,6 +41,9 @@ export async function writeNarrative(
   return runStructured<Narrative>(prompt, NarrativeSchema, fallback, {
     systemPrompt: SYSTEM,
     temperature: 0.7,
-    maxOutputTokens: 600,
+    // gpt-oss-120b is a reasoning model: a small cap is consumed by reasoning
+    // before any JSON is emitted ("max completion tokens reached"). Needs a
+    // large budget. See memory: groq-structured-output-constraints.
+    maxOutputTokens: 3000,
   });
 }
