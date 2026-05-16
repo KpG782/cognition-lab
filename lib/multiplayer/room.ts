@@ -36,16 +36,19 @@ export function getPlayerId(): string {
 }
 
 const EMPTY_STATE: RoomStateData = {
-  phase: "lobby",
+  phase: "intro",
   players: [],
-  mode: "spend",
+  mode: "looking_glass",
 };
 
-export async function createRoom(mode: ModeKey = "spend"): Promise<string> {
+export async function createRoom(): Promise<string> {
   const code = roomCode();
   await supabase
     .from("rooms")
-    .insert({ id: code, state: { ...EMPTY_STATE, mode } });
+    .insert({
+      id: code,
+      state: { mode: "looking_glass", phase: "intro" },
+    });
   return code;
 }
 
@@ -179,7 +182,7 @@ export async function softResetKeepingSolo(
   await supabase
     .from("rooms")
     .update({
-      state: { ...state, mode: newMode, solo: true, phase: "submit" },
+      state: { ...state, mode: newMode, solo: true, phase: "intro" },
     })
     .eq("id", code);
 }
@@ -198,6 +201,29 @@ export async function submitDecision(
     decision_text: decisionText,
     price,
   });
+}
+
+/** Looking Glass: a full response set rides inside the submissions text
+ *  column as JSON. No schema migration — reuses submitDecision's row shape. */
+export async function submitResponseSet(
+  roomCode: string,
+  playerId: string,
+  playerName: string,
+  payload: {
+    kind: "self" | "observer";
+    subjectId: string;
+    responses: Record<string, number>;
+    prediction?: Record<string, number>;
+    situation?: string;
+  }
+): Promise<void> {
+  await submitDecision(
+    roomCode,
+    playerId,
+    playerName,
+    JSON.stringify(payload),
+    null
+  );
 }
 
 export async function submitHumanDiagnosis(

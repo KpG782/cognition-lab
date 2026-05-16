@@ -34,7 +34,13 @@ export interface CouncilResult {
   futureSelf: string;
 }
 
-export type RoomPhase = "lobby" | "submit" | "diagnose" | "reveal" | "gap";
+export type RoomPhase =
+  | "intro"
+  | "test"
+  | "predict"
+  | "result"
+  | "await_observer"
+  | "blindspot";
 
 export interface Player {
   id: string;
@@ -44,7 +50,8 @@ export interface Player {
 export interface RoomStateData {
   phase: RoomPhase;
   players: Player[];
-  mode?: ModeKey;
+  // jsonb field; carries "looking_glass" in the Looking Glass pivot.
+  mode?: ModeKey | string;
   // Solo mode: a confederate fills the second seat; mode stays switchable past lobby.
   solo?: boolean;
 }
