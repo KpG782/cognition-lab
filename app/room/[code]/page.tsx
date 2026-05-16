@@ -1,45 +1,67 @@
 "use client";
 
-import { use, useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { RoomLobby } from "@/components/RoomLobby";
-import { DecisionInput } from "@/components/DecisionInput";
-import { BlindDiagnosisPanel } from "@/components/BlindDiagnosisPanel";
-import { BiasCard } from "@/components/BiasCard";
-import { CouncilVote } from "@/components/CouncilVote";
-import { BlindSpotGap } from "@/components/BlindSpotGap";
-import { ModeTabs } from "@/components/ModeTabs";
+import { Questionnaire } from "@/components/Questionnaire";
+import { SelfPrediction } from "@/components/SelfPrediction";
+import { ResultCard } from "@/components/ResultCard";
+import { BlindSpotCard } from "@/components/BlindSpotCard";
+import { ObserverForm } from "@/components/ObserverForm";
 import {
   getPlayerId,
   getRoomState,
   addPlayer,
   setPhase,
-  setRoomMode,
-  resetRoom,
-  submitDecision,
-  submitHumanDiagnosis,
-  submitAIDiagnosis,
-  fetchSubmissions,
-  fetchDiagnoses,
-  subscribeToRoom,
   setSolo,
-  submitConfederateDecision,
-  submitConfederateDiagnosis,
-  softResetKeepingSolo,
+  resetRoom,
+  fetchSubmissions,
+  subscribeToRoom,
+  submitResponseSet,
 } from "@/lib/multiplayer/room";
-import { CONFEDERATE_ID } from "@/lib/mocks";
-import { MODES, type ModeKey } from "@/lib/modes";
 import { useSession } from "@/store/session-store";
-import type {
-  RoomStateData,
-  Submission,
-  Diagnosis,
-  AIDiagnosisContent,
-  HumanDiagnosisContent,
-  DiagnoseResult,
-} from "@/lib/types";
+import {
+  scoreSelf,
+  scoreObserver,
+  typeCode,
+  blindSpot,
+  TRAITS,
+  type TraitScores,
+} from "@/lib/bigfive";
+import { templateNarrative, type Narrative } from "@/lib/agents/narrative";
+import type { RoomStateData, Submission } from "@/lib/types";
+
+const ID_KEY = "cognition_player_id";
+
+interface ResponsePayload {
+  kind: "self" | "observer";
+  subjectId: string;
+  responses: Record<string, number>;
+  prediction?: Record<string, number>;
+  situation?: string;
+}
+
+function parsePayload(s: Submission): ResponsePayload | null {
+  try {
+    const p = JSON.parse(s.decision_text) as ResponsePayload;
+    if (p && (p.kind === "self" || p.kind === "observer")) return p;
+  } catch {
+    /* not a response set */
+  }
+  return null;
+}
+
+function predictionToScores(p: Record<string, number>): TraitScores {
+  const out = {} as TraitScores;
+  for (const t of TRAITS) out[t] = p[t] ?? 50;
+  return out;
+}
 
 export default function RoomPage({
   params,
@@ -47,39 +69,169 @@ export default function RoomPage({
   params: Promise<{ code: string }>;
 }) {
   const { code } = use(params);
-  const router = useRouter();
 
+  // ---- Observer guest branch (?observe=1) ---------------------------------
+  const [isObserver, setIsObserver] = useState(false);
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    setIsObserver(sp.get("observe") === "1");
+  }, []);
+
+  if (isObserver) {
+    return <ObserverGuest code={code} />;
+  }
+  return <RoomHost code={code} />;
+}
+
+// =============================================================================
+// Observer guest: skips all phases, fills the observer form.
+// =============================================================================
+function ObserverGuest({ code }: { code: string }) {
+  const [name, setName] = useState("");
+  const [nameLocked, setNameLocked] = useState(false);
+  const [hostId, setHostId] = useState<string | null>(null);
+  const [hostName, setHostName] = useState("your friend");
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const state = await getRoomState(code);
+      const subs = await fetchSubmissions(code);
+      const selfSub = subs.find((s) => parsePayload(s)?.kind === "self");
+      const resolved =
+        state.hostPlayerId ?? selfSub?.player_id ?? null;
+      setHostId(resolved);
+      if (selfSub) setHostName(selfSub.player_name);
+    })();
+  }, [code]);
+
+  function guestId(): string {
+    let id = localStorage.getItem(ID_KEY);
+    if (!id) {
+      id =
+        "g_" +
+        Math.random().toString(36).slice(2, 10);
+      localStorage.setItem(ID_KEY, id);
+    }
+    return id;
+  }
+
+  if (done) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-[720px] flex-col justify-center px-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-[#0A0A0A]">
+          Thank you.
+        </h1>
+        <p className="mt-3 max-w-[60ch] text-base text-[#0A0A0A]/70">
+          Your read of {hostName} has been recorded. They&apos;ll see how it
+          compares to how they see themselves. You can close this tab.
+        </p>
+      </main>
+    );
+  }
+
+  if (!nameLocked) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-[720px] flex-col justify-center px-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-[#0A0A0A]">
+          You&apos;ve been asked for an honest read.
+        </h1>
+        <p className="mt-3 max-w-[60ch] text-base text-[#0A0A0A]/70">
+          A friend wants to know how they actually come across. Enter your
+          first name to begin.
+        </p>
+        <form
+          className="mt-6 flex gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (name.trim()) setNameLocked(true);
+          }}
+        >
+          <label htmlFor="guest-name" className="sr-only">
+            Your first name
+          </label>
+          <input
+            id="guest-name"
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your first name"
+            className="h-11 w-56 rounded-md border border-[#0A0A0A]/15 bg-white px-3 text-base text-[#0A0A0A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2"
+          />
+          <button
+            type="submit"
+            disabled={name.trim().length === 0}
+            className="inline-flex h-11 cursor-pointer items-center rounded-md bg-[#1E3A8A] px-6 text-sm font-medium text-white transition-colors hover:bg-[#1E3A8A]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Begin
+          </button>
+        </form>
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto min-h-screen max-w-[720px] px-6 py-12">
+      <ObserverForm
+        subjectName={hostName}
+        onDone={async (responses) => {
+          await submitResponseSet(code, guestId(), name.trim(), {
+            kind: "observer",
+            subjectId: hostId ?? "host",
+            responses,
+          });
+          setDone(true);
+        }}
+      />
+    </main>
+  );
+}
+
+// =============================================================================
+// Host: the 6-phase Looking Glass machine.
+// =============================================================================
+function RoomHost({ code }: { code: string }) {
   const playerId = useRef<string>("");
-  const { playerName, setPlayerName, reset } = useSession();
-  const [nameDraft, setNameDraft] = useState("");
-  const [joined, setJoined] = useState(false);
-
-  const [state, setState] = useState<RoomStateData>({
-    phase: "lobby",
-    players: [],
-  });
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
-  const [routerHint, setRouterHint] = useState<ModeKey | null>(null);
-  const [hintDismissed, setHintDismissed] = useState(false);
-  const aiRunning = useRef(false);
-  const confedRunning = useRef(false);
-  const routerRan = useRef(false);
-
   if (!playerId.current && typeof window !== "undefined") {
     playerId.current = getPlayerId();
   }
 
+  const {
+    playerName,
+    setPlayerName,
+    phase,
+    setPhase: setLocalPhase,
+    solo,
+    setSolo: setLocalSolo,
+    responses,
+    setResponses,
+    prediction,
+    setPrediction,
+    observed,
+    setObserved,
+    narrative,
+    setNarrative,
+    reset,
+  } = useSession();
+
+  const [nameDraft, setNameDraft] = useState("");
+  const [joined, setJoined] = useState(false);
+  const [state, setState] = useState<RoomStateData>({
+    phase: "intro",
+    players: [],
+  });
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [copied, setCopied] = useState(false);
+  const narrativeRan = useRef(false);
+  const observerRequested = useRef(false);
+
   const refetch = useCallback(async () => {
     const s = await getRoomState(code);
     setState(s);
-    const subs = await fetchSubmissions(code);
-    setSubmissions(subs);
-    const ds = await fetchDiagnoses(subs.map((x) => x.id));
-    setDiagnoses(ds);
+    setSubmissions(await fetchSubmissions(code));
   }, [code]);
 
-  // Join + subscribe
+  // Join + subscribe (non-solo realtime sync).
   useEffect(() => {
     if (!joined || !playerName) return;
     let cleanup = () => {};
@@ -92,492 +244,412 @@ export default function RoomPage({
   }, [joined, playerName, code, refetch]);
 
   const isHost = state.players[0]?.id === playerId.current;
-  const playerCount = state.players.length;
-  const mode: ModeKey = state.mode ?? "spend";
-  const solo = state.solo ?? false;
 
-  const mySubmission = submissions.find(
-    (s) => s.player_id === playerId.current
-  );
-
-  // Non-forcing router check on the local player's submission.
-  useEffect(() => {
-    if (state.phase !== "submit" || mode === "mirror") return;
-    if (!mySubmission || routerRan.current) return;
-    routerRan.current = true;
-    (async () => {
-      try {
-        const r = await fetch("/api/route", {
-          method: "POST",
-          body: JSON.stringify({ input: mySubmission.decision_text }),
-        });
-        const { primaryMode } = await r.json();
-        if (primaryMode && primaryMode !== mode) {
-          setRouterHint(primaryMode as ModeKey);
-        }
-      } catch {
-        /* router is advisory only */
-      }
-    })();
-  }, [state.phase, mode, mySubmission]);
-
-  const humanDiagnoses = diagnoses.filter(
-    (d) => d.diagnoser_type === "human"
-  );
-  const aiDiagnoses = diagnoses.filter((d) => d.diagnoser_type === "ai");
-
-  // Host runs AI diagnosis once per submission when entering diagnose phase
-  useEffect(() => {
-    if (!isHost || state.phase !== "diagnose") return;
-    if (aiRunning.current) return;
-    const pending = submissions.filter(
-      (s) => !aiDiagnoses.some((d) => d.submission_id === s.id)
-    );
-    if (pending.length === 0) return;
-    aiRunning.current = true;
-    (async () => {
-      for (const s of pending) {
-        try {
-          const dRes = await fetch("/api/diagnose", {
-            method: "POST",
-            body: JSON.stringify({
-              decisionText: s.decision_text,
-              price: s.price,
-              mode,
-            }),
-          });
-          const diagnose: DiagnoseResult = await dRes.json();
-          const [iRes, cRes] = await Promise.all([
-            fetch("/api/intervene", {
-              method: "POST",
-              body: JSON.stringify({
-                decisionText: s.decision_text,
-                diagnose,
-                mode,
-              }),
-            }),
-            fetch("/api/council", {
-              method: "POST",
-              body: JSON.stringify({
-                decisionText: s.decision_text,
-                summary: diagnose.summary,
-                mode,
-              }),
-            }),
-          ]);
-          await submitAIDiagnosis(s.id, {
-            diagnose,
-            intervention: await iRes.json(),
-            council: await cRes.json(),
-          });
-        } catch {
-          /* mock fallback already returned by routes */
-        }
-      }
-      aiRunning.current = false;
-      await refetch();
-    })();
-  }, [isHost, state.phase, submissions, aiDiagnoses, refetch, mode]);
-
-  // Solo: host seeds the confederate's own decision once per run.
-  useEffect(() => {
-    if (!isHost || !solo || state.phase !== "submit") return;
-    if (submissions.some((s) => s.player_id === CONFEDERATE_ID)) return;
-    submitConfederateDecision(code, mode).then(refetch);
-  }, [isHost, solo, state.phase, submissions, code, mode, refetch]);
-
-  // Solo: host generates the confederate's blind read of each real
-  // submission (Bank + LLM enrichment via /api/confederate).
-  useEffect(() => {
-    if (!isHost || !solo || state.phase !== "diagnose") return;
-    if (confedRunning.current) return;
-    const pending = submissions.filter(
-      (s) =>
-        s.player_id !== CONFEDERATE_ID &&
-        !humanDiagnoses.some(
-          (d) =>
-            d.submission_id === s.id &&
-            d.diagnoser_id === CONFEDERATE_ID
-        )
-    );
-    if (pending.length === 0) return;
-    confedRunning.current = true;
-    (async () => {
-      for (const s of pending) {
-        let prediction = "";
-        try {
-          const r = await fetch("/api/confederate", {
-            method: "POST",
-            body: JSON.stringify({
-              decisionText: s.decision_text,
-              mode,
-            }),
-          });
-          prediction = (await r.json()).prediction;
-        } catch {
-          /* route already returns a bank fallback */
-        }
-        if (prediction) {
-          await submitConfederateDiagnosis(s.id, prediction);
-        }
-      }
-      confedRunning.current = false;
-      await refetch();
-    })();
-  }, [
-    isHost,
-    solo,
-    state.phase,
-    submissions,
-    humanDiagnoses,
-    mode,
-    refetch,
-  ]);
-
-  // Auto-advance logic (any client may push the phase forward; idempotent)
-  useEffect(() => {
-    if (playerCount < 1) return;
-    if (
-      state.phase === "submit" &&
-      submissions.length >= playerCount &&
-      playerCount >= 2
-    ) {
-      setPhase(code, "diagnose");
-    }
-    if (state.phase === "diagnose") {
-      const expectedHuman = playerCount * (playerCount - 1);
-      if (
-        humanDiagnoses.length >= expectedHuman &&
-        aiDiagnoses.length >= submissions.length &&
-        submissions.length > 0
-      ) {
-        setPhase(code, "reveal");
-      }
-    }
-  }, [
-    state.phase,
-    submissions.length,
-    humanDiagnoses.length,
-    aiDiagnoses.length,
-    playerCount,
-    code,
-  ]);
-
-  // ---- Name gate ----
+  // ---- Name gate ----------------------------------------------------------
   if (!joined || !playerName) {
     return (
       <main className="mx-auto flex min-h-screen max-w-[720px] flex-col justify-center px-6">
-        <h1 className="text-2xl font-semibold">
-          Joining room <span className="font-mono">{code}</span>
+        <h1 className="text-2xl font-semibold tracking-tight text-[#0A0A0A]">
+          Room <span className="font-mono">{code}</span>
         </h1>
-        <p className="mt-2 text-sm text-neutral-500">Enter your name.</p>
-        <div className="mt-4 flex gap-3">
-          <Input
+        <p className="mt-2 text-sm text-[#0A0A0A]/60">Enter your name.</p>
+        <form
+          className="mt-4 flex gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (nameDraft.trim()) {
+              setPlayerName(nameDraft.trim());
+              setJoined(true);
+            }
+          }}
+        >
+          <label htmlFor="player-name" className="sr-only">
+            Your name
+          </label>
+          <input
+            id="player-name"
             autoFocus
             value={nameDraft}
             onChange={(e) => setNameDraft(e.target.value)}
             placeholder="Your name"
-            className="max-w-60"
+            className="h-11 w-56 rounded-md border border-[#0A0A0A]/15 bg-white px-3 text-base text-[#0A0A0A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2"
           />
-          <Button
+          <button
+            type="submit"
             disabled={nameDraft.trim().length === 0}
-            onClick={() => {
-              setPlayerName(nameDraft.trim());
-              setJoined(true);
-            }}
-            className="bg-[#1E3A8A] text-white hover:bg-[#1E3A8A]/90"
+            className="inline-flex h-11 cursor-pointer items-center rounded-md bg-[#1E3A8A] px-6 text-sm font-medium text-white transition-colors hover:bg-[#1E3A8A]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Enter
-          </Button>
-        </div>
+          </button>
+        </form>
       </main>
     );
   }
 
-  const myReadsCount = (() => {
-    const expected = playerCount * (playerCount - 1);
-    return Math.min(humanDiagnoses.length, expected);
-  })();
-  const expectedHuman = playerCount * (playerCount - 1);
+  const selfScores: TraitScores | null = responses
+    ? scoreSelf(responses)
+    : null;
+  const code5 = selfScores ? typeCode(selfScores) : "";
+
+  function shareUrl(): string {
+    if (typeof window === "undefined") return "";
+    return `${window.location.origin}/room/${code}?observe=1`;
+  }
+
+  async function runNarrative(s: TraitScores, c: string) {
+    try {
+      const r = await fetch("/api/narrative", {
+        method: "POST",
+        body: JSON.stringify({ code: c, scores: s }),
+      });
+      if (!r.ok) throw new Error("bad status");
+      setNarrative((await r.json()) as Narrative);
+    } catch {
+      setNarrative(templateNarrative(c, s));
+    }
+  }
+
+  async function useAiObserver() {
+    if (!responses) return;
+    try {
+      const r = await fetch("/api/observer", {
+        method: "POST",
+        body: JSON.stringify({ responses }),
+      });
+      if (!r.ok) throw new Error("bad status");
+      setObserved((await r.json()) as TraitScores);
+    } catch {
+      setObserved(scoreSelf(responses));
+    }
+    setLocalPhase("blindspot");
+  }
 
   return (
-    <main className="mx-auto min-h-screen max-w-[720px] px-6 py-12 md:max-w-[960px]">
-      <header className="mb-6 flex items-baseline justify-between border-b border-neutral-200 pb-4">
-        <span className="text-lg font-semibold">Cognition Lab</span>
-        <span className="font-mono text-sm text-neutral-500">
-          {MODES[mode].label} · room {code} · {state.phase}
+    <main className="mx-auto min-h-screen max-w-[720px] px-6 py-12">
+      <header className="mb-10 flex items-baseline justify-between border-b border-[#0A0A0A]/10 pb-4">
+        <span className="text-lg font-semibold text-[#0A0A0A]">
+          Looking Glass
+        </span>
+        <span className="font-mono text-xs text-[#0A0A0A]/45">
+          room {code}
         </span>
       </header>
 
-      <div className="mb-10">
-        <ModeTabs
-          current={mode}
-          onSwitch={async (m) => {
-            if (m === mode) return;
-            // Solo: switch any time — soft-reset and re-run in the same room.
-            if (solo) {
-              await softResetKeepingSolo(code, m);
-              await refetch();
-              return;
-            }
-            if (state.phase !== "lobby") return;
-            await setRoomMode(code, m);
-            await refetch();
-          }}
-        />
-        {state.phase !== "lobby" && !solo && (
-          <p className="mt-2 font-mono text-[11px] text-neutral-400">
-            Mode locks once the session starts.
-          </p>
-        )}
-        {solo && state.phase !== "lobby" && (
-          <p className="mt-2 font-mono text-[11px] text-neutral-400">
-            Solo: switching mode restarts the run in this room.
-          </p>
-        )}
-      </div>
-
-      {routerHint && !hintDismissed && state.phase === "submit" && (
-        <div className="mb-8 flex flex-wrap items-center gap-3 border border-[#1E3A8A]/30 bg-[#1E3A8A]/5 px-4 py-3 text-sm">
-          <span className="text-neutral-700">
-            Your input looks like{" "}
-            <strong>{MODES[routerHint].label}</strong>. Continue in{" "}
-            {MODES[mode].label} or switch?
-          </span>
-          <div className="flex gap-2">
-            {isHost && (
-              <Button
-                className="h-8 cursor-pointer bg-[#1E3A8A] px-3 text-xs text-white hover:bg-[#1E3A8A]/90"
-                onClick={async () => {
-                  await setRoomMode(code, routerHint);
-                  setRouterHint(null);
+      {phase === "intro" && (
+        <>
+          {solo ? (
+            <section className="cl-fade-in">
+              <h1 className="text-3xl font-semibold tracking-tight text-[#0A0A0A]">
+                30 statements. Then a guess.
+              </h1>
+              <p className="mt-4 max-w-[60ch] text-base leading-relaxed text-[#0A0A0A]/75">
+                You&apos;ll rate how well 30 statements describe you, then
+                predict your own profile before seeing the result. The point
+                isn&apos;t the score — it&apos;s the gap between how you see
+                yourself and how you actually come across.
+              </p>
+              <button
+                type="button"
+                onClick={() => setLocalPhase("test")}
+                className="mt-10 inline-flex h-12 cursor-pointer items-center rounded-md bg-[#1E3A8A] px-8 text-base font-medium text-white transition-colors hover:bg-[#1E3A8A]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2"
+              >
+                Begin
+              </button>
+            </section>
+          ) : (
+            <>
+              <RoomLobby
+                code={code}
+                players={state.players}
+                solo={state.solo ?? false}
+                onToggleSolo={async (next) => {
+                  await setSolo(code, next);
+                  setLocalSolo(next);
                   await refetch();
                 }}
-              >
-                Switch to {MODES[routerHint].label}
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              className="h-8 cursor-pointer px-3 text-xs"
-              onClick={() => setHintDismissed(true)}
-            >
-              Continue
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {state.phase === "lobby" && (
-        <RoomLobby
-          code={code}
-          players={state.players}
-          solo={solo}
-          onToggleSolo={async (next) => {
-            await setSolo(code, next);
-            await refetch();
-          }}
-          onStart={() => setPhase(code, "submit")}
-        />
-      )}
-
-      {state.phase === "submit" && (
-        <DecisionInput
-          lockedCount={submissions.length}
-          totalCount={playerCount}
-          promptHint={MODES[mode].promptHint}
-          showPrice={mode === "spend"}
-          onLock={(text, price) =>
-            submitDecision(code, playerId.current, playerName, text, price)
-          }
-        />
-      )}
-
-      {state.phase === "diagnose" && (
-        <BlindDiagnosisPanel
-          others={submissions.filter(
-            (s) => s.player_id !== playerId.current
+                onStart={async () => {
+                  await setPhase(code, "test");
+                  setLocalPhase("test");
+                }}
+              />
+              {!isHost && (
+                <p className="mt-6 font-mono text-xs text-[#0A0A0A]/45">
+                  Waiting for the host to begin.
+                </p>
+              )}
+            </>
           )}
-          humanReadCount={myReadsCount}
-          expected={expectedHuman}
-          onSubmit={(preds) => {
-            Object.entries(preds).forEach(([sid, text]) =>
-              submitHumanDiagnosis(sid, playerId.current, text)
-            );
+        </>
+      )}
+
+      {phase === "test" && (
+        <Questionnaire
+          onDone={(r) => {
+            setResponses(r);
+            submitResponseSet(code, playerId.current, playerName, {
+              kind: "self",
+              subjectId: playerId.current,
+              responses: r,
+            });
+            setLocalPhase("predict");
           }}
         />
       )}
 
-      {state.phase === "reveal" && (
-        <Reveal submissions={submissions} diagnoses={diagnoses} />
+      {phase === "predict" && (
+        <SelfPrediction
+          onDone={(p) => {
+            setPrediction(p);
+            setLocalPhase("result");
+          }}
+        />
       )}
 
-      {state.phase === "gap" && (
-        <div className="space-y-12">
-          {submissions.map((s) => {
-            const ai = aiDiagnoses.find((d) => d.submission_id === s.id)
-              ?.content as AIDiagnosisContent | undefined;
-            const friends = humanDiagnoses
-              .filter((d) => d.submission_id === s.id)
-              .map((d) => (d.content as HumanDiagnosisContent).prediction);
-            const top = ai?.diagnose.biases
-              .filter((b) => b.fired)
-              .sort((a, b) => b.confidence - a.confidence)[0];
-            const conf = top?.confidence ?? 0;
-            const gap =
-              conf >= 75 ? "HIGH" : conf >= 55 ? "MEDIUM" : "LOW";
-            return (
-              <div key={s.id}>
-                <p className="mb-3 font-medium">{s.player_name}</p>
-                <BlindSpotGap
-                  selfMotive={s.decision_text}
-                  aiBias={top?.name ?? null}
-                  friendsTheme={friends[0] ?? ""}
-                  gap={gap}
-                />
-              </div>
-            );
-          })}
-          <Button
-            variant="outline"
-            onClick={async () => {
-              reset();
+      {phase === "result" && selfScores && (
+        <ResultPhase
+          code={code5}
+          scores={selfScores}
+          narrative={narrative}
+          ensureNarrative={() => {
+            if (!narrativeRan.current) {
+              narrativeRan.current = true;
+              runNarrative(selfScores, code5);
+            }
+          }}
+          onNext={async () => {
+            if (solo) {
+              await useAiObserver();
+            } else {
+              await setRoomHostId(code, playerId.current);
+              await setPhase(code, "await_observer");
+              setLocalPhase("await_observer");
+            }
+          }}
+        />
+      )}
+
+      {phase === "await_observer" && (
+        <AwaitObserver
+          shareUrl={shareUrl()}
+          copied={copied}
+          onCopy={async () => {
+            try {
+              await navigator.clipboard.writeText(shareUrl());
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            } catch {
+              /* clipboard unavailable */
+            }
+          }}
+          onAi={useAiObserver}
+          submissions={submissions}
+          myId={playerId.current}
+          onObserved={(o) => {
+            setObserved(o);
+            setLocalPhase("blindspot");
+          }}
+          requestedRef={observerRequested}
+        />
+      )}
+
+      {phase === "blindspot" && prediction && observed && (
+        <BlindSpotPhase
+          prediction={prediction}
+          observed={observed}
+          solo={solo}
+          code={code5}
+          scores={selfScores}
+          onRestart={async () => {
+            reset();
+            try {
               await resetRoom(code);
-              router.push("/");
-            }}
-          >
-            New session
-          </Button>
-        </div>
-      )}
-
-      {state.phase === "reveal" && (
-        <div className="mt-10">
-          <Button
-            onClick={() => setPhase(code, "gap")}
-            className="bg-[#1E3A8A] text-white hover:bg-[#1E3A8A]/90"
-          >
-            See the blind spot gap
-          </Button>
-        </div>
+            } catch {
+              /* solo room teardown is best-effort */
+            }
+            setLocalPhase("intro");
+          }}
+        />
       )}
     </main>
   );
 }
 
-function Reveal({
-  submissions,
-  diagnoses,
+// Persist the host's player id into rooms.state so a guest arriving via
+// ?observe=1 knows whose profile to rate. setPhase preserves this field.
+async function setRoomHostId(code: string, hostId: string): Promise<void> {
+  const fresh = await getRoomState(code);
+  const { supabase } = await import("@/lib/multiplayer/supabase");
+  await supabase
+    .from("rooms")
+    .update({ state: { ...fresh, hostPlayerId: hostId } })
+    .eq("id", code);
+}
+
+function ResultPhase({
+  code,
+  scores,
+  narrative,
+  ensureNarrative,
+  onNext,
 }: {
-  submissions: Submission[];
-  diagnoses: Diagnosis[];
+  code: string;
+  scores: TraitScores;
+  narrative: Narrative | null;
+  ensureNarrative: () => void;
+  onNext: () => void;
 }) {
+  useEffect(() => {
+    ensureNarrative();
+  }, [ensureNarrative]);
+
+  const n = narrative ?? templateNarrative(code, scores);
+
   return (
-    <div className="space-y-16">
-      {submissions.map((s) => {
-        const ai = diagnoses.find(
-          (d) => d.submission_id === s.id && d.diagnoser_type === "ai"
-        )?.content as AIDiagnosisContent | undefined;
-        const friends = diagnoses
-          .filter(
-            (d) =>
-              d.submission_id === s.id && d.diagnoser_type === "human"
-          )
-          .map((d) => (d.content as HumanDiagnosisContent).prediction);
-        const topBiases = (ai?.diagnose.biases ?? [])
-          .filter((b) => b.fired)
-          .sort((a, b) => b.confidence - a.confidence)
-          .slice(0, 3);
-
-        return (
-          <section key={s.id}>
-            <h2 className="mb-4 text-xl font-semibold">{s.player_name}</h2>
-            <div className="grid gap-6 md:grid-cols-3">
-              <div>
-                <p className="font-mono text-xs uppercase text-neutral-500">
-                  What you said
-                </p>
-                <p className="mt-2 text-sm text-neutral-700">
-                  {s.decision_text}
-                </p>
-              </div>
-              <div>
-                <p className="font-mono text-xs uppercase text-neutral-500">
-                  What your friends saw
-                </p>
-                <ul className="mt-2 space-y-2">
-                  {friends.length === 0 && (
-                    <li className="text-sm text-neutral-400">—</li>
-                  )}
-                  {friends.map((f, i) => (
-                    <li key={i} className="text-sm text-neutral-700">
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <p className="font-mono text-xs uppercase text-neutral-500">
-                  What the algorithm saw
-                </p>
-                <div className="mt-2 space-y-3">
-                  {topBiases.map((b) => (
-                    <BiasCard key={b.name} bias={b} />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {ai && (
-              <div className="mt-6 border border-neutral-200 p-5">
-                <p className="font-mono text-xs uppercase text-neutral-500">
-                  Intervention deployed
-                </p>
-                <p className="mt-2 font-medium">
-                  {ai.intervention.interventionName}{" "}
-                  <span className="font-mono text-xs text-neutral-500">
-                    ({ai.intervention.citation})
-                  </span>
-                </p>
-                <p className="mt-1 text-sm text-neutral-600">
-                  {ai.intervention.mechanism}
-                </p>
-                <p className="mt-3 text-neutral-800">
-                  {ai.intervention.message}
-                </p>
-              </div>
-            )}
-
-            {ai && (
-              <div className="mt-6">
-                <p className="mb-3 font-mono text-xs uppercase text-neutral-500">
-                  The council
-                </p>
-                <CouncilVote council={ai.council} />
-              </div>
-            )}
-
-            <div className="mt-6 flex gap-3">
-              <DecisionButton label="Buy now" />
-              <DecisionButton label="Wait 24 hours" />
-              <DecisionButton label="Skip" />
-            </div>
-          </section>
-        );
-      })}
-    </div>
+    <>
+      <ResultCard code={code} scores={scores} narrative={n} />
+      <div className="mt-12">
+        <button
+          type="button"
+          onClick={onNext}
+          className="inline-flex h-12 cursor-pointer items-center rounded-md bg-[#1E3A8A] px-8 text-base font-medium text-white transition-colors hover:bg-[#1E3A8A]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2"
+        >
+          See my blind spot
+        </button>
+      </div>
+    </>
   );
 }
 
-function DecisionButton({ label }: { label: string }) {
-  const [picked, setPicked] = useState(false);
+function AwaitObserver({
+  shareUrl,
+  copied,
+  onCopy,
+  onAi,
+  submissions,
+  myId,
+  onObserved,
+  requestedRef,
+}: {
+  shareUrl: string;
+  copied: boolean;
+  onCopy: () => void;
+  onAi: () => void;
+  submissions: Submission[];
+  myId: string;
+  onObserved: (o: TraitScores) => void;
+  requestedRef: React.RefObject<boolean>;
+}) {
+  useEffect(() => {
+    if (requestedRef.current) return;
+    const obs = submissions.find((s) => {
+      const p = parsePayload(s);
+      return p?.kind === "observer" && p.subjectId === myId;
+    });
+    if (obs) {
+      const p = parsePayload(obs)!;
+      requestedRef.current = true;
+      onObserved(scoreObserver(p.responses));
+    }
+  }, [submissions, myId, onObserved, requestedRef]);
+
   return (
-    <Button
-      variant={picked ? "default" : "outline"}
-      onClick={() => setPicked(true)}
-      className={picked ? "bg-[#1E3A8A] text-white" : ""}
-    >
-      {label}
-    </Button>
+    <section className="cl-fade-in">
+      <h1 className="text-2xl font-semibold tracking-tight text-[#0A0A0A]">
+        Now the real measurement.
+      </h1>
+      <p className="mt-3 max-w-[60ch] text-base leading-relaxed text-[#0A0A0A]/75">
+        Send this link to one person who knows you. Their honest read is what
+        we measure your blind spot against.
+      </p>
+
+      <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <code className="block w-full overflow-x-auto rounded-md border border-[#0A0A0A]/15 bg-[#0A0A0A]/3 px-3 py-2.5 font-mono text-sm text-[#0A0A0A]">
+          {shareUrl}
+        </code>
+        <button
+          type="button"
+          onClick={onCopy}
+          className="inline-flex h-11 shrink-0 cursor-pointer items-center rounded-md border border-[#0A0A0A]/20 px-5 text-sm font-medium text-[#0A0A0A] transition-colors hover:border-[#1E3A8A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2"
+        >
+          {copied ? "Copied" : "Copy link"}
+        </button>
+      </div>
+
+      <p className="mt-10 font-mono text-xs text-[#0A0A0A]/45">
+        Waiting for a friend to respond…
+      </p>
+
+      <button
+        type="button"
+        onClick={onAi}
+        className="mt-4 cursor-pointer text-sm text-[#0A0A0A]/60 underline underline-offset-4 transition-colors hover:text-[#0A0A0A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2"
+      >
+        Use AI estimate instead
+      </button>
+    </section>
+  );
+}
+
+function BlindSpotPhase({
+  prediction,
+  observed,
+  solo,
+  code,
+  scores,
+  onRestart,
+}: {
+  prediction: Record<string, number>;
+  observed: TraitScores;
+  solo: boolean;
+  code: string;
+  scores: TraitScores | null;
+  onRestart: () => void;
+}) {
+  const bs = useMemo(
+    () => blindSpot(predictionToScores(prediction), observed),
+    [prediction, observed]
+  );
+  const [copied, setCopied] = useState(false);
+
+  async function copyResult() {
+    const lines = [
+      `Looking Glass — Type ${code || "—"}`,
+      bs.headline,
+      `Blind-Spot Index: ${bs.index}`,
+      ...bs.perTrait.map(
+        (p) =>
+          `${p.trait}: predicted ${p.predicted}, observed ${p.observed} (gap ${p.gap}, ${p.band})`
+      ),
+    ];
+    void scores;
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+
+  return (
+    <>
+      <BlindSpotCard blindSpot={bs} source={solo ? "ai" : "friend"} />
+      <div className="mx-auto mt-8 flex max-w-[560px] gap-3">
+        <button
+          type="button"
+          onClick={copyResult}
+          className="inline-flex h-11 cursor-pointer items-center rounded-md bg-[#1E3A8A] px-6 text-sm font-medium text-white transition-colors hover:bg-[#1E3A8A]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2"
+        >
+          {copied ? "Copied" : "Copy result"}
+        </button>
+        <button
+          type="button"
+          onClick={onRestart}
+          className="inline-flex h-11 cursor-pointer items-center rounded-md border border-[#0A0A0A]/20 px-6 text-sm font-medium text-[#0A0A0A] transition-colors hover:border-[#1E3A8A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2"
+        >
+          Start over
+        </button>
+      </div>
+    </>
   );
 }

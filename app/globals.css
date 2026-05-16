@@ -138,6 +138,16 @@
   }
 }
 
+.cl-bar {
+  transition: width 0.7s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-bar {
+    transition: none;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

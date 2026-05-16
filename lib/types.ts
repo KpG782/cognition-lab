@@ -54,6 +54,9 @@ export interface RoomStateData {
   mode?: ModeKey | string;
   // Solo mode: a confederate fills the second seat; mode stays switchable past lobby.
   solo?: boolean;
+  // Looking Glass: set when the host awaits a friend observer, so a guest
+  // arriving via ?observe=1 knows whose profile they are rating.
+  hostPlayerId?: string;
 }
 
 export interface Submission {
