@@ -40,7 +40,7 @@ export default function Home() {
     setJoining(true);
     const ok = await joinRoom(c);
     if (ok) {
-      router.push(`/room/${c}`);
+      router.push(`/room/${c}?observe=1`);
     } else {
       setJoinError("Room not found.");
       setJoining(false);
@@ -79,13 +79,13 @@ export default function Home() {
               onClick={() => setShowJoin(true)}
               className="cursor-pointer text-sm text-[#0A0A0A]/60 underline underline-offset-4 transition-colors duration-200 hover:text-[#0A0A0A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2"
             >
-              Have a code?
+              Have a friend&apos;s code?
             </button>
           ) : (
             <div className="flex flex-col items-center gap-2">
               <div className="flex items-center gap-3">
                 <label htmlFor="room-code" className="sr-only">
-                  Four-letter room code
+                  Friend&apos;s room code
                 </label>
                 <input
                   id="room-code"
@@ -104,7 +104,7 @@ export default function Home() {
                   disabled={joining}
                   className="inline-flex h-11 cursor-pointer items-center justify-center rounded-md bg-[#1E3A8A] px-6 text-sm font-medium text-white transition-colors duration-200 hover:bg-[#1E3A8A]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {joining ? "Joining…" : "Join"}
+                  {joining ? "Joining…" : "Continue"}
                 </button>
               </div>
               {joinError && (
