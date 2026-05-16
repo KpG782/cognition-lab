@@ -266,6 +266,43 @@ export const CITATIONS = {
     peerReviewed: true,
     url: "https://doi.org/10.1016/S0065-2601(08)60024-6",
   },
+  big_five: {
+    authors: "Goldberg",
+    year: 1992,
+    paper: "The Development of Markers for the Big-Five Factor Structure",
+    journal: "Psychological Assessment",
+    finding:
+      "Five broad factors — Openness, Conscientiousness, Extraversion, Agreeableness, Neuroticism — robustly describe personality across cultures.",
+  },
+  five_factor_model: {
+    authors: "Costa & McCrae",
+    year: 1992,
+    paper: "Revised NEO Personality Inventory (NEO-PI-R)",
+    finding:
+      "The Five-Factor Model shows strong cross-instrument and longitudinal validity.",
+  },
+  ipip: {
+    authors: "Goldberg",
+    year: 1999,
+    paper: "A broad-bandwidth public-domain personality inventory (IPIP)",
+    finding:
+      "Public-domain personality items measure the Big Five with reliability comparable to proprietary inventories.",
+  },
+  self_other_asymmetry: {
+    authors: "Vazire",
+    year: 2010,
+    paper: "Who Knows What About a Person? The Self-Other Knowledge Asymmetry (SOKA) Model",
+    journal: "Journal of Personality and Social Psychology",
+    finding:
+      "Others judge our evaluative and visible traits more accurately than we judge them ourselves.",
+  },
+  johari_window: {
+    authors: "Luft & Ingham",
+    year: 1955,
+    paper: "The Johari Window: A Graphic Model of Interpersonal Awareness",
+    finding:
+      "A 'blind' quadrant exists — traits others see in us that we cannot see in ourselves.",
+  },
 } as const;
 
 export type CitationKey = keyof typeof CITATIONS;
