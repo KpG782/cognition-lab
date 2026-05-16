@@ -36,13 +36,17 @@ const NAV = [
   { id: "research", label: "Research" },
 ];
 
+const PEER_REVIEWED = Object.values(CITATIONS).filter(
+  (c) => "peerReviewed" in c && c.peerReviewed
+).length;
+
 // The research finding the page leads with — surfaced, not buried in a list.
 const PROOF = [
   { stat: "2002", label: "blind-spot effect, replicated since" },
   { stat: "~2.5×", label: "losses weighted over equal gains" },
   {
-    stat: `${Object.values(CITATIONS).length}`,
-    label: "named, peer-reviewed citations",
+    stat: `${PEER_REVIEWED}`,
+    label: "peer-reviewed papers, linked to source",
   },
 ];
 
@@ -317,15 +321,28 @@ export default function Home() {
           Grounded in the literature
         </h2>
         <p className="mt-4 max-w-[58ch] text-sm leading-relaxed text-neutral-600">
-          Every diagnosis cites named, peer-reviewed findings — not vibes. A
-          sample of the registry:
+          Every diagnosis cites named, sourced findings — not vibes. A sample of
+          the registry, each linked to the original paper:
         </p>
         <div className="mt-6 space-y-1.5 font-mono text-xs text-neutral-500">
           {Object.values(CITATIONS)
             .slice(0, 4)
             .map((c) => (
               <p key={c.paper}>
-                {c.authors} ({c.year}) — {c.paper}.
+                {c.authors} ({c.year}) —{" "}
+                {"url" in c && c.url ? (
+                  <a
+                    href={c.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="cursor-pointer text-[#1E3A8A] underline underline-offset-2 transition-colors duration-200 hover:text-[#0A0A0A]"
+                  >
+                    {c.paper}
+                  </a>
+                ) : (
+                  c.paper
+                )}
+                .
               </p>
             ))}
           <button

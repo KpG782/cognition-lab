@@ -24,7 +24,12 @@ import {
   fetchSubmissions,
   fetchDiagnoses,
   subscribeToRoom,
+  setSolo,
+  submitConfederateDecision,
+  submitConfederateDiagnosis,
+  softResetKeepingSolo,
 } from "@/lib/multiplayer/room";
+import { CONFEDERATE_ID } from "@/lib/mocks";
 import { MODES, type ModeKey } from "@/lib/modes";
 import { useSession } from "@/store/session-store";
 import type {
@@ -58,6 +63,7 @@ export default function RoomPage({
   const [routerHint, setRouterHint] = useState<ModeKey | null>(null);
   const [hintDismissed, setHintDismissed] = useState(false);
   const aiRunning = useRef(false);
+  const confedRunning = useRef(false);
   const routerRan = useRef(false);
 
   if (!playerId.current && typeof window !== "undefined") {
@@ -88,6 +94,7 @@ export default function RoomPage({
   const isHost = state.players[0]?.id === playerId.current;
   const playerCount = state.players.length;
   const mode: ModeKey = state.mode ?? "spend";
+  const solo = state.solo ?? false;
 
   const mySubmission = submissions.find(
     (s) => s.player_id === playerId.current
@@ -146,6 +153,7 @@ export default function RoomPage({
               body: JSON.stringify({
                 decisionText: s.decision_text,
                 diagnose,
+                mode,
               }),
             }),
             fetch("/api/council", {
@@ -153,6 +161,7 @@ export default function RoomPage({
               body: JSON.stringify({
                 decisionText: s.decision_text,
                 summary: diagnose.summary,
+                mode,
               }),
             }),
           ]);
@@ -169,6 +178,61 @@ export default function RoomPage({
       await refetch();
     })();
   }, [isHost, state.phase, submissions, aiDiagnoses, refetch, mode]);
+
+  // Solo: host seeds the confederate's own decision once per run.
+  useEffect(() => {
+    if (!isHost || !solo || state.phase !== "submit") return;
+    if (submissions.some((s) => s.player_id === CONFEDERATE_ID)) return;
+    submitConfederateDecision(code, mode).then(refetch);
+  }, [isHost, solo, state.phase, submissions, code, mode, refetch]);
+
+  // Solo: host generates the confederate's blind read of each real
+  // submission (Bank + LLM enrichment via /api/confederate).
+  useEffect(() => {
+    if (!isHost || !solo || state.phase !== "diagnose") return;
+    if (confedRunning.current) return;
+    const pending = submissions.filter(
+      (s) =>
+        s.player_id !== CONFEDERATE_ID &&
+        !humanDiagnoses.some(
+          (d) =>
+            d.submission_id === s.id &&
+            d.diagnoser_id === CONFEDERATE_ID
+        )
+    );
+    if (pending.length === 0) return;
+    confedRunning.current = true;
+    (async () => {
+      for (const s of pending) {
+        let prediction = "";
+        try {
+          const r = await fetch("/api/confederate", {
+            method: "POST",
+            body: JSON.stringify({
+              decisionText: s.decision_text,
+              mode,
+            }),
+          });
+          prediction = (await r.json()).prediction;
+        } catch {
+          /* route already returns a bank fallback */
+        }
+        if (prediction) {
+          await submitConfederateDiagnosis(s.id, prediction);
+        }
+      }
+      confedRunning.current = false;
+      await refetch();
+    })();
+  }, [
+    isHost,
+    solo,
+    state.phase,
+    submissions,
+    humanDiagnoses,
+    mode,
+    refetch,
+  ]);
 
   // Auto-advance logic (any client may push the phase forward; idempotent)
   useEffect(() => {
@@ -249,14 +313,26 @@ export default function RoomPage({
         <ModeTabs
           current={mode}
           onSwitch={async (m) => {
-            if (m === mode || state.phase !== "lobby") return;
+            if (m === mode) return;
+            // Solo: switch any time — soft-reset and re-run in the same room.
+            if (solo) {
+              await softResetKeepingSolo(code, m);
+              await refetch();
+              return;
+            }
+            if (state.phase !== "lobby") return;
             await setRoomMode(code, m);
             await refetch();
           }}
         />
-        {state.phase !== "lobby" && (
+        {state.phase !== "lobby" && !solo && (
           <p className="mt-2 font-mono text-[11px] text-neutral-400">
             Mode locks once the session starts.
+          </p>
+        )}
+        {solo && state.phase !== "lobby" && (
+          <p className="mt-2 font-mono text-[11px] text-neutral-400">
+            Solo: switching mode restarts the run in this room.
           </p>
         )}
       </div>
@@ -296,6 +372,11 @@ export default function RoomPage({
         <RoomLobby
           code={code}
           players={state.players}
+          solo={solo}
+          onToggleSolo={async (next) => {
+            await setSolo(code, next);
+            await refetch();
+          }}
           onStart={() => setPhase(code, "submit")}
         />
       )}

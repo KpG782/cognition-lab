@@ -45,6 +45,8 @@ export interface RoomStateData {
   phase: RoomPhase;
   players: Player[];
   mode?: ModeKey;
+  // Solo mode: a confederate fills the second seat; mode stays switchable past lobby.
+  solo?: boolean;
 }
 
 export interface Submission {

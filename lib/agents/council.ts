@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { runStructured } from "../llm/client";
-import { MOCK_COUNCIL } from "../mocks";
+import { MOCK_COUNCIL, MOCK_COUNCIL_GENERIC } from "../mocks";
 import type { CouncilResult } from "../types";
+import type { ModeKey } from "../modes";
 
 const schema = z.object({
   system1: z.string(),
@@ -16,12 +17,14 @@ const SYSTEM = `You are a council of three voices weighing one purchase decision
 
 export async function council(
   decisionText: string,
-  summary: string
+  summary: string,
+  mode: ModeKey = "spend"
 ): Promise<CouncilResult> {
+  const fallback = mode === "spend" ? MOCK_COUNCIL : MOCK_COUNCIL_GENERIC;
   const prompt = `Decision: "${decisionText}"
 Diagnostic summary: ${summary}
 Give the three single-sentence verdicts.`;
-  return runStructured<CouncilResult>(prompt, schema, MOCK_COUNCIL, {
+  return runStructured<CouncilResult>(prompt, schema, fallback, {
     systemPrompt: SYSTEM,
     temperature: 0.7,
     maxOutputTokens: 1500,

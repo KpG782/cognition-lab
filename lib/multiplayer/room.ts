@@ -11,6 +11,11 @@ import type {
   Player,
 } from "../types";
 import type { ModeKey } from "../modes";
+import {
+  CONFEDERATE_ID,
+  CONFEDERATE_NAME,
+  CONFEDERATE_DECISIONS,
+} from "../mocks";
 
 const roomCode = customAlphabet("ABCDEFGHJKLMNPQRSTUVWXYZ", 4);
 const idGen = customAlphabet(
@@ -102,6 +107,80 @@ export async function resetRoom(code: string): Promise<void> {
   await supabase
     .from("rooms")
     .update({ state: { ...EMPTY_STATE, mode: state.mode ?? "spend" } })
+    .eq("id", code);
+}
+
+// ---- Solo mode ----
+
+const confederatePlayer: Player = {
+  id: CONFEDERATE_ID,
+  name: CONFEDERATE_NAME,
+};
+
+/** Lobby toggle. On: seat the confederate so playerCount hits 2 and every
+ *  existing phase gate works untouched. Off: remove it. */
+export async function setSolo(code: string, solo: boolean): Promise<void> {
+  const state = await getRoomState(code);
+  const players = solo
+    ? state.players.some((p) => p.id === CONFEDERATE_ID)
+      ? state.players
+      : [...state.players, confederatePlayer]
+    : state.players.filter((p) => p.id !== CONFEDERATE_ID);
+  await supabase
+    .from("rooms")
+    .update({ state: { ...state, solo, players } })
+    .eq("id", code);
+}
+
+/** Host seeds the confederate's own decision (mode-keyed) once per run. */
+export async function submitConfederateDecision(
+  roomCode: string,
+  mode: ModeKey
+): Promise<void> {
+  const seed =
+    CONFEDERATE_DECISIONS[mode] ?? CONFEDERATE_DECISIONS.spend;
+  await supabase.from("submissions").insert({
+    room_id: roomCode,
+    player_id: CONFEDERATE_ID,
+    player_name: CONFEDERATE_NAME,
+    decision_text: seed.text,
+    price: seed.price,
+  });
+}
+
+/** Host inserts the confederate's blind read of a real player's submission.
+ *  diagnoser_type stays "human" so it lands in the friends column. */
+export async function submitConfederateDiagnosis(
+  submissionId: string,
+  predictionText: string
+): Promise<void> {
+  await supabase.from("diagnoses").insert({
+    submission_id: submissionId,
+    diagnoser_id: CONFEDERATE_ID,
+    diagnoser_type: "human",
+    content: { prediction: predictionText },
+  });
+}
+
+/** Solo-only: switch mode without leaving the room. Wipes this room's
+ *  submissions + diagnoses, keeps solo on and the confederate seated,
+ *  drops back to submit so the player re-runs instantly. */
+export async function softResetKeepingSolo(
+  code: string,
+  newMode: ModeKey
+): Promise<void> {
+  const subs = await fetchSubmissions(code);
+  const ids = subs.map((s) => s.id);
+  if (ids.length > 0) {
+    await supabase.from("diagnoses").delete().in("submission_id", ids);
+    await supabase.from("submissions").delete().eq("room_id", code);
+  }
+  const state = await getRoomState(code);
+  await supabase
+    .from("rooms")
+    .update({
+      state: { ...state, mode: newMode, solo: true, phase: "submit" },
+    })
     .eq("id", code);
 }
 

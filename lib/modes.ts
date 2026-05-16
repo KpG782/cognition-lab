@@ -88,7 +88,7 @@ export const MODES = {
       "Kierkegaard",
       "Samuelson",
     ],
-    status: "architected" as ModeStatus,
+    status: "live" as ModeStatus,
     promptHint: "Should I quit my job for a smaller startup that excites me more?",
   },
   conflict: {
@@ -109,7 +109,7 @@ export const MODES = {
       "frankl_pause",
     ],
     primaryResearchers: ["Jung", "Frankl", "Rosenberg", "Epictetus", "Ross"],
-    status: "architected" as ModeStatus,
+    status: "live" as ModeStatus,
     promptHint:
       "My groupmate ghosted on the project again and I want to send something brutal.",
   },
@@ -129,7 +129,7 @@ export const MODES = {
     ],
     interventions: ["name_the_weapon", "counter_frame", "refusal_script"],
     primaryResearchers: ["Cialdini", "Kahneman", "Brehm"],
-    status: "architected" as ModeStatus,
+    status: "live" as ModeStatus,
     promptHint:
       "I got a DM from a 'recruiter' saying I'm shortlisted for a high-paying role and need to act fast.",
   },
@@ -151,7 +151,7 @@ export const MODES = {
       "implementation_intention",
     ],
     primaryResearchers: ["Clear", "Dweck", "Schwartz", "McAdams", "Bem"],
-    status: "architected" as ModeStatus,
+    status: "live" as ModeStatus,
     promptHint: "I keep saying I'll stop scrolling at midnight but I'm still up.",
   },
 } as const;

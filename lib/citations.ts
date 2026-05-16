@@ -6,49 +6,72 @@ export const CITATIONS = {
     journal: "Personality and Social Psychology Bulletin",
     finding:
       "People consistently rate themselves as less susceptible to cognitive biases than others, even when shown evidence to the contrary.",
+    peerReviewed: true,
+    url: "https://doi.org/10.1177/0146167202286008",
   },
   loss_aversion: {
     authors: "Kahneman & Tversky",
     year: 1979,
     paper: "Prospect Theory: An Analysis of Decision under Risk",
+    journal: "Econometrica",
     finding: "Losses are weighted roughly 2.5x more heavily than equivalent gains.",
+    peerReviewed: true,
+    url: "https://doi.org/10.2307/1914185",
   },
   hyperbolic_discounting: {
     authors: "Laibson",
     year: 1997,
     paper: "Golden Eggs and Hyperbolic Discounting",
+    journal: "The Quarterly Journal of Economics",
     finding: "People disproportionately prefer immediate rewards over delayed ones.",
+    peerReviewed: true,
+    url: "https://doi.org/10.1162/003355397555253",
   },
   anchoring: {
     authors: "Tversky & Kahneman",
     year: 1974,
     paper: "Judgment under Uncertainty: Heuristics and Biases",
+    journal: "Science",
     finding: "An initial reference point distorts subsequent quantitative judgments.",
+    peerReviewed: true,
+    url: "https://doi.org/10.1126/science.185.4157.1124",
   },
   sunk_cost: {
     authors: "Arkes & Blumer",
     year: 1985,
     paper: "The Psychology of Sunk Cost",
+    journal: "Organizational Behavior and Human Decision Processes",
     finding: "Past investments irrationally influence current decisions.",
+    peerReviewed: true,
+    url: "https://doi.org/10.1016/0749-5978(85)90049-4",
   },
   affect_heuristic: {
-    authors: "Slovic",
+    authors: "Slovic, Finucane, Peters & MacGregor",
     year: 2007,
     paper: "The Affect Heuristic",
+    journal: "European Journal of Operational Research",
     finding: "Emotional states substitute for deliberate analysis in judgment.",
+    peerReviewed: true,
+    url: "https://doi.org/10.1016/j.ejor.2005.04.006",
   },
   implementation_intention: {
     authors: "Gollwitzer",
     year: 1999,
     paper: "Implementation Intentions: Strong Effects of Simple Plans",
+    journal: "American Psychologist",
     finding: "If-then plans dramatically increase follow-through on intentions.",
+    peerReviewed: true,
+    url: "https://doi.org/10.1037/0003-066X.54.7.493",
   },
   temporal_self_distancing: {
     authors: "Kross & Ayduk",
     year: 2011,
     paper: "Making Meaning out of Negative Experiences by Self-Distancing",
+    journal: "Current Directions in Psychological Science",
     finding:
       "Third-person reframing reduces emotional reactivity and improves reasoning.",
+    peerReviewed: true,
+    url: "https://doi.org/10.1177/0963721411408883",
   },
   systems_1_and_2: {
     authors: "Kahneman",
@@ -60,9 +83,13 @@ export const CITATIONS = {
   future_self: {
     authors: "Hershfield",
     year: 2011,
-    paper: "Future self-continuity",
+    paper:
+      "Future Self-Continuity: How Conceptions of the Future Self Transform Intertemporal Choice",
+    journal: "Annals of the New York Academy of Sciences",
     finding:
       "Greater psychological connection to one's future self increases prudent decision-making.",
+    peerReviewed: true,
+    url: "https://doi.org/10.1111/j.1749-6632.2011.06201.x",
   },
   reactance: {
     authors: "Brehm",
@@ -85,6 +112,8 @@ export const CITATIONS = {
     journal: "Advances in Experimental Social Psychology",
     finding:
       "Observers over-attribute others' behavior to disposition and under-weight situational causes.",
+    peerReviewed: true,
+    url: "https://doi.org/10.1016/S0065-2601(08)60357-3",
   },
   frankl_pause: {
     authors: "Frankl",
@@ -114,6 +143,8 @@ export const CITATIONS = {
     journal: "Journal of Risk and Uncertainty",
     finding:
       "People disproportionately stick with the current state even when alternatives are superior.",
+    peerReviewed: true,
+    url: "https://doi.org/10.1007/BF00055564",
   },
   optionality_paralysis: {
     authors: "Kierkegaard",
@@ -129,6 +160,7 @@ export const CITATIONS = {
     journal: "Harvard Business Review",
     finding:
       "Imagining a decision has already failed surfaces risks that prospective optimism hides.",
+    url: "https://hbr.org/2007/09/performing-a-project-premortem",
   },
   ten_ten_ten_rule: {
     authors: "Welch",
@@ -221,6 +253,8 @@ export const CITATIONS = {
     journal: "Review of General Psychology",
     finding:
       "People construct identity as an internalized story; incoherent stories predict distress.",
+    peerReviewed: true,
+    url: "https://doi.org/10.1037/1089-2680.5.2.100",
   },
   self_perception: {
     authors: "Bem",
@@ -229,6 +263,8 @@ export const CITATIONS = {
     journal: "Advances in Experimental Social Psychology",
     finding:
       "People infer their own attitudes by observing their behavior, much as they infer others'.",
+    peerReviewed: true,
+    url: "https://doi.org/10.1016/S0065-2601(08)60024-6",
   },
 } as const;
 

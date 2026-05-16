@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { runStructured } from "../llm/client";
-import { MOCK_DIAGNOSE, MOCK_DIAGNOSE_REPLY } from "../mocks";
+import {
+  MOCK_DIAGNOSE,
+  MOCK_DIAGNOSE_REPLY,
+  MOCK_DIAGNOSE_CHOICE,
+  MOCK_DIAGNOSE_CONFLICT,
+  MOCK_DIAGNOSE_INFLUENCE,
+  MOCK_DIAGNOSE_IDENTITY,
+} from "../mocks";
 import type { DiagnoseResult } from "../types";
 import { MODES, type ModeKey } from "../modes";
 import { getScannerCitation } from "../citations";
@@ -57,7 +64,19 @@ export async function diagnose(
   const prompt = `Decision: "${decisionText}"${
     price != null ? `\nStated price: ${price}` : ""
   }`;
-  const fallback = mode === "reply" ? MOCK_DIAGNOSE_REPLY : MOCK_DIAGNOSE;
+  // Every mode has its own scanner-accurate mock so a free-tier hiccup
+  // never shows the wrong bias cards on stage. mirror reuses the spend
+  // engine + mock by design (it's the multiplayer cross-diagnosis path).
+  const FALLBACKS: Record<ModeKey, DiagnoseResult> = {
+    spend: MOCK_DIAGNOSE,
+    reply: MOCK_DIAGNOSE_REPLY,
+    mirror: MOCK_DIAGNOSE,
+    choice: MOCK_DIAGNOSE_CHOICE,
+    conflict: MOCK_DIAGNOSE_CONFLICT,
+    influence: MOCK_DIAGNOSE_INFLUENCE,
+    identity: MOCK_DIAGNOSE_IDENTITY,
+  };
+  const fallback = FALLBACKS[mode] ?? MOCK_DIAGNOSE;
   return runStructured<DiagnoseResult>(prompt, schema, fallback, {
     systemPrompt: buildSystem(mode),
     temperature: 0.3,
