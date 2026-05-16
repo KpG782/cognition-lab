@@ -1,5 +1,3 @@
-import type { ModeKey } from "./modes";
-
 // Closed union retained for the typed Spend intervention selector.
 export type BiasName =
   | "loss_aversion"
@@ -51,7 +49,7 @@ export interface RoomStateData {
   phase: RoomPhase;
   players: Player[];
   // jsonb field; carries "looking_glass" in the Looking Glass pivot.
-  mode?: ModeKey | string;
+  mode?: string;
   // Solo mode: a confederate fills the second seat; mode stays switchable past lobby.
   solo?: boolean;
   // Looking Glass: set when the host awaits a friend observer, so a guest
@@ -67,7 +65,7 @@ export interface Submission {
   decision_text: string;
   price: number | null;
   // Not a DB column — mode is carried at room level (rooms.state.mode).
-  mode?: ModeKey;
+  mode?: string;
   created_at: string;
 }
 
