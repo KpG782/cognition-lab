@@ -1,439 +1,137 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { createRoom, joinRoom } from "@/lib/multiplayer/room";
-import { CITATIONS } from "@/lib/citations";
-import { ModeShowcase } from "@/components/ModeShowcase";
+import { useSession } from "@/store/session-store";
 import { CitationModal } from "@/components/CitationModal";
-import type { ModeKey } from "@/lib/modes";
-
-const PROTOCOL = [
-  {
-    n: "01",
-    title: "Submit a decision",
-    body: "Each player logs one real purchase they're weighing — privately. No one sees your reasoning yet.",
-  },
-  {
-    n: "02",
-    title: "Diagnose a friend",
-    body: "You never analyze your own choice. You scan someone else's reasoning for bias — where it's actually visible.",
-  },
-  {
-    n: "03",
-    title: "Measure the gap",
-    body: "Your self-assessment is set against how your friends — and the model — read you. The distance is the blind spot.",
-  },
-];
-
-// In-page navigation — anchors so the page is navigable, not a single scroll.
-const NAV = [
-  { id: "blind-spot", label: "Blind spot" },
-  { id: "modes", label: "Modes" },
-  { id: "protocol", label: "Protocol" },
-  { id: "research", label: "Research" },
-];
-
-const PEER_REVIEWED = Object.values(CITATIONS).filter(
-  (c) => "peerReviewed" in c && c.peerReviewed
-).length;
-
-// The research finding the page leads with — surfaced, not buried in a list.
-const PROOF = [
-  { stat: "2002", label: "blind-spot effect, replicated since" },
-  { stat: "~2.5×", label: "losses weighted over equal gains" },
-  {
-    stat: `${PEER_REVIEWED}`,
-    label: "peer-reviewed papers, linked to source",
-  },
-];
 
 export default function Home() {
   const router = useRouter();
-  const [mode, setMode] = useState<"home" | "join">("home");
+  const setSolo = useSession((s) => s.setSolo);
+
+  const [starting, setStarting] = useState(false);
+  const [showJoin, setShowJoin] = useState(false);
   const [code, setCode] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [about, setAbout] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState("");
   const [citations, setCitations] = useState(false);
 
-  useEffect(() => {
-    if (!about) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setAbout(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [about]);
-
-  async function handleCreate() {
-    setBusy(true);
-    const c = await createRoom("spend");
-    router.push(`/room/${c}`);
-  }
-
-  async function handleSelectMode(m: ModeKey) {
-    setBusy(true);
-    const c = await createRoom(m);
-    router.push(`/room/${c}`);
+  async function handleStart() {
+    if (starting) return;
+    setStarting(true);
+    setSolo(true);
+    try {
+      const c = await createRoom();
+      router.push(`/room/${c}`);
+    } catch {
+      setStarting(false);
+    }
   }
 
   async function handleJoin() {
-    setError("");
+    if (joining) return;
+    setJoinError("");
     const c = code.trim().toUpperCase();
     if (c.length !== 4) {
-      setError("Enter a 4-letter code.");
+      setJoinError("Enter the 4-letter code.");
       return;
     }
-    setBusy(true);
+    setJoining(true);
     const ok = await joinRoom(c);
     if (ok) {
       router.push(`/room/${c}`);
     } else {
-      setError("Room not found.");
-      setBusy(false);
+      setJoinError("Room not found.");
+      setJoining(false);
     }
   }
 
-  const PrimaryActions = (
-    <div className="mt-10">
-      {mode === "home" ? (
-        <div className="flex flex-wrap gap-3">
-          <Button
-            onClick={handleCreate}
-            disabled={busy}
-            className="h-11 cursor-pointer bg-[#1E3A8A] px-6 text-white transition-colors duration-200 hover:bg-[#1E3A8A]/90"
-          >
-            {busy ? "Opening room…" : "Create a room"}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setMode("join")}
-            disabled={busy}
-            className="h-11 cursor-pointer px-6"
-          >
-            Join with a code
-          </Button>
-        </div>
-      ) : (
-        <div className="flex w-full flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <label htmlFor="room-code" className="sr-only">
-              Four-letter room code
-            </label>
-            <Input
-              id="room-code"
-              autoFocus
-              value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              onKeyDown={(e) => e.key === "Enter" && handleJoin()}
-              maxLength={4}
-              placeholder="CODE"
-              aria-invalid={!!error}
-              className="h-11 max-w-40 text-center font-mono text-lg uppercase tracking-[0.4em]"
-            />
-            <Button
-              onClick={handleJoin}
-              disabled={busy}
-              className="h-11 cursor-pointer bg-[#1E3A8A] px-6 text-white transition-colors duration-200 hover:bg-[#1E3A8A]/90"
-            >
-              Join
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setMode("home");
-                setError("");
-              }}
-              className="h-11 cursor-pointer"
-            >
-              Back
-            </Button>
-          </div>
-          {error && (
-            <p role="alert" className="text-sm text-[#DC2626]">
-              {error}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-
   return (
-    <>
-      <header className="sticky top-0 z-40 border-b border-neutral-200 bg-white">
-        <nav
-          aria-label="Primary"
-          className="mx-auto flex h-14 max-w-[760px] items-center justify-between gap-4 px-6"
+    <main className="mx-auto flex min-h-screen w-full max-w-[720px] flex-col items-center justify-center px-6 py-20">
+      <div className="cl-fade-in flex w-full flex-col items-center text-center">
+        <h1
+          className="font-semibold tracking-tight text-[#0A0A0A]"
+          style={{ fontSize: "clamp(2.5rem, 8vw, 5rem)", lineHeight: 1.05 }}
         >
-          <a
-            href="#top"
-            className="font-mono text-xs font-semibold uppercase tracking-[0.25em] text-[#0A0A0A]"
-          >
-            Cognition Lab
-          </a>
-          <div className="hidden items-center gap-6 md:flex">
-            {NAV.map((n) => (
-              <a
-                key={n.id}
-                href={`#${n.id}`}
-                className="text-sm text-neutral-500 transition-colors duration-200 hover:text-[#0A0A0A]"
-              >
-                {n.label}
-              </a>
-            ))}
-          </div>
-          <Button
-            onClick={handleCreate}
-            disabled={busy}
-            className="h-9 cursor-pointer bg-[#1E3A8A] px-4 text-sm text-white transition-colors duration-200 hover:bg-[#1E3A8A]/90"
-          >
-            {busy ? "Opening…" : "Create a room"}
-          </Button>
-        </nav>
-      </header>
-
-      <main
-        id="top"
-        className="mx-auto flex min-h-screen max-w-[760px] flex-col px-6 pb-16 pt-12 sm:pb-24 sm:pt-16"
-      >
-      {/* Hero — the hook */}
-      <div className="cl-fade-in">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-neutral-500">
-          Behavioral Economics Diagnostic
-        </p>
-
-        <h1 className="mt-6 text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl">
-          You can&apos;t see your
-          <br />
-          own bias.
-          <span className="text-[#1E3A8A]"> Your friends can.</span>
+          Looking Glass
         </h1>
 
-        <p className="mt-6 max-w-[52ch] text-lg leading-relaxed text-neutral-700">
-          A multiplayer instrument for the bias blind spot. You diagnose the
-          reasoning behind your friends&apos; decisions. They diagnose yours.
-          Then you measure the distance between the two.
+        <p className="mt-8 max-w-[52ch] text-lg leading-relaxed text-[#0A0A0A]">
+          A research-backed personality test that shows you the part you
+          can&apos;t see — the gap between how you see yourself and how you
+          actually come across.
         </p>
 
-        <p className="mt-4 max-w-[52ch] text-sm leading-relaxed text-neutral-500">
-          Open a room, share the 4-letter code, and log one real purchase
-          you&apos;re weighing. Takes about five minutes with two people.
-        </p>
-
-        {PrimaryActions}
-
-        {/* Proof bar — credibility surfaced, not buried */}
-        <dl className="mt-12 grid grid-cols-3 gap-px border border-neutral-200 bg-neutral-200">
-          {PROOF.map((p) => (
-            <div key={p.label} className="bg-white px-4 py-5">
-              <dt className="font-mono text-xl font-semibold text-[#0A0A0A] sm:text-2xl">
-                {p.stat}
-              </dt>
-              <dd className="mt-1 text-xs leading-snug text-neutral-500">
-                {p.label}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-
-      {/* The blind spot — operationalizes the moat, visually */}
-      <section
-        id="blind-spot"
-        className="cl-fade-in mt-16 scroll-mt-20 border-t border-neutral-200 pt-12"
-        aria-label="Why diagnose each other"
-      >
-        <h2 className="font-mono text-xs uppercase tracking-[0.25em] text-neutral-500">
-          The blind spot
-        </h2>
-        <div className="mt-8 grid gap-px border border-neutral-200 bg-neutral-200 sm:grid-cols-2">
-          <div className="bg-white p-6">
-            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-neutral-400">
-              Diagnosing yourself
-            </p>
-            <p className="mt-3 text-base leading-relaxed text-neutral-700">
-              &ldquo;I thought it through. My reasons are sound.&rdquo; The flaw
-              is recursive — you can&apos;t introspect your way out of a flaw in
-              introspection.
-            </p>
-          </div>
-          <div className="bg-white p-6">
-            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#1E3A8A]">
-              Diagnosed by others
-            </p>
-            <p className="mt-3 text-base leading-relaxed text-neutral-700">
-              A friend — and the model — read the same reasoning from the
-              outside, where the bias is plainly visible. That asymmetry is the
-              entire instrument.
-            </p>
-          </div>
-        </div>
-        <p className="mt-4 font-mono text-xs italic text-neutral-400">
-          Pronin, Lin &amp; Ross (2002) — the effect holds even when subjects
-          are shown direct evidence of their own bias.
-        </p>
-      </section>
-
-      <div id="modes" className="scroll-mt-20">
-        <ModeShowcase onSelect={handleSelectMode} />
-      </div>
-
-      {/* Protocol — the sequence, read as steps not paragraphs */}
-      <section
-        id="protocol"
-        className="cl-fade-in mt-16 scroll-mt-20 border-t border-neutral-200 pt-12"
-        aria-label="How the diagnostic works"
-      >
-        <h2 className="font-mono text-xs uppercase tracking-[0.25em] text-neutral-500">
-          The Protocol
-        </h2>
-        <ol className="mt-8 space-y-px border border-neutral-200 bg-neutral-200">
-          {PROTOCOL.map((step) => (
-            <li
-              key={step.n}
-              className="flex gap-5 bg-white p-6 sm:gap-8 sm:p-7"
-            >
-              <p className="shrink-0 font-mono text-sm text-[#1E3A8A]">
-                {step.n}
-              </p>
-              <div>
-                <h3 className="text-base font-semibold">{step.title}</h3>
-                <p className="mt-1.5 max-w-[58ch] text-sm leading-relaxed text-neutral-600">
-                  {step.body}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      {/* Research foundation — the visible research is a hard requirement */}
-      <section
-        id="research"
-        className="cl-fade-in mt-16 scroll-mt-20 border-t border-neutral-200 pt-12"
-        aria-label="Research foundation"
-      >
-        <h2 className="font-mono text-xs uppercase tracking-[0.25em] text-neutral-500">
-          Grounded in the literature
-        </h2>
-        <p className="mt-4 max-w-[58ch] text-sm leading-relaxed text-neutral-600">
-          Every diagnosis cites named, sourced findings — not vibes. A sample of
-          the registry, each linked to the original paper:
-        </p>
-        <div className="mt-6 space-y-1.5 font-mono text-xs text-neutral-500">
-          {Object.values(CITATIONS)
-            .slice(0, 4)
-            .map((c) => (
-              <p key={c.paper}>
-                {c.authors} ({c.year}) —{" "}
-                {"url" in c && c.url ? (
-                  <a
-                    href={c.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="cursor-pointer text-[#1E3A8A] underline underline-offset-2 transition-colors duration-200 hover:text-[#0A0A0A]"
-                  >
-                    {c.paper}
-                  </a>
-                ) : (
-                  c.paper
-                )}
-                .
-              </p>
-            ))}
-          <button
-            onClick={() => setCitations(true)}
-            className="cursor-pointer text-neutral-400 underline underline-offset-4 transition-colors duration-200 hover:text-[#0A0A0A]"
-          >
-            + {Object.values(CITATIONS).length - 4} more in the citation
-            registry
-          </button>
-        </div>
-      </section>
-
-      {/* Climax CTA — the page ends on the action */}
-      <section className="cl-fade-in mt-16 border-t border-neutral-200 pt-12">
-        <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          Find the bias you can&apos;t see.
-        </h2>
-        <p className="mt-3 max-w-[52ch] text-sm leading-relaxed text-neutral-600">
-          Pull in one friend, log a decision each, and let the instrument
-          measure what introspection hides.
-        </p>
-        {PrimaryActions}
-      </section>
-
-      <footer className="mt-auto flex items-center justify-between pt-20">
-        <p className="font-mono text-xs italic text-neutral-400">
-          Pronin, Lin &amp; Ross, 2002
-        </p>
         <button
-          onClick={() => setAbout(true)}
-          className="cursor-pointer text-sm text-neutral-500 underline underline-offset-4 transition-colors duration-200 hover:text-[#0A0A0A]"
+          type="button"
+          onClick={handleStart}
+          disabled={starting}
+          className="mt-12 inline-flex h-12 cursor-pointer items-center justify-center rounded-md bg-[#1E3A8A] px-8 text-base font-medium text-white transition-colors duration-200 hover:bg-[#1E3A8A]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          About this instrument
+          {starting ? "Opening…" : "Take the Test"}
         </button>
-      </footer>
 
-      {about && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-6"
-          onClick={() => setAbout(false)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="about-title"
-            className="cl-fade-in max-h-[80vh] max-w-[640px] overflow-y-auto border border-neutral-200 bg-white p-8"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="font-mono text-xs uppercase tracking-[0.25em] text-neutral-500">
-              About this instrument
-            </p>
-            <h2 id="about-title" className="mt-3 text-2xl font-semibold">
-              Why diagnose each other?
-            </h2>
-            <p className="mt-5 text-sm leading-relaxed text-neutral-700">
-              Pronin, Lin &amp; Ross (2002) showed that people consistently rate
-              themselves as less susceptible to cognitive biases than others —
-              the bias blind spot — even when shown direct evidence to the
-              contrary.
-            </p>
-            <p className="mt-3 text-sm leading-relaxed text-neutral-700">
-              Solo debiasing fails because the blind spot is recursive: you
-              can&apos;t introspect your way out of a flaw in introspection.
-              Multiplayer diagnosis works because other people — and an
-              algorithm — observe your reasoning from the outside, where the
-              bias is visible.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3 border-t border-neutral-200 pt-6">
-              <Button
-                className="h-11 cursor-pointer bg-[#1E3A8A] px-6 text-white transition-colors duration-200 hover:bg-[#1E3A8A]/90"
-                onClick={() => {
-                  setAbout(false);
-                  setCitations(true);
-                }}
-              >
-                View all {Object.values(CITATIONS).length} citations
-              </Button>
-              <Button
-                variant="outline"
-                className="h-11 cursor-pointer px-6"
-                onClick={() => setAbout(false)}
-              >
-                Close
-              </Button>
+        <div className="mt-8">
+          {!showJoin ? (
+            <button
+              type="button"
+              onClick={() => setShowJoin(true)}
+              className="cursor-pointer text-sm text-[#0A0A0A]/60 underline underline-offset-4 transition-colors duration-200 hover:text-[#0A0A0A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2"
+            >
+              Have a code?
+            </button>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex items-center gap-3">
+                <label htmlFor="room-code" className="sr-only">
+                  Four-letter room code
+                </label>
+                <input
+                  id="room-code"
+                  autoFocus
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => e.key === "Enter" && handleJoin()}
+                  maxLength={4}
+                  placeholder="CODE"
+                  aria-invalid={!!joinError}
+                  className="h-11 w-32 rounded-md border border-[#0A0A0A]/15 bg-white text-center font-mono text-lg uppercase tracking-[0.4em] text-[#0A0A0A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2"
+                />
+                <button
+                  type="button"
+                  onClick={handleJoin}
+                  disabled={joining}
+                  className="inline-flex h-11 cursor-pointer items-center justify-center rounded-md bg-[#1E3A8A] px-6 text-sm font-medium text-white transition-colors duration-200 hover:bg-[#1E3A8A]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {joining ? "Joining…" : "Join"}
+                </button>
+              </div>
+              {joinError && (
+                <p role="alert" className="text-sm text-[#0A0A0A]/60">
+                  {joinError}
+                </p>
+              )}
             </div>
-          </div>
+          )}
         </div>
-      )}
+
+        <div className="mt-20 flex flex-col items-center gap-4">
+          <button
+            type="button"
+            onClick={() => setCitations(true)}
+            className="cursor-pointer text-sm text-[#0A0A0A]/55 underline underline-offset-4 transition-colors duration-200 hover:text-[#0A0A0A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A8A] focus-visible:ring-offset-2"
+          >
+            About the research
+          </button>
+          <p className="max-w-[60ch] font-mono text-xs italic text-[#0A0A0A]/55">
+            Built on the Big Five (Goldberg, 1992) and the Self-Other Knowledge
+            Asymmetry (Vazire, 2010).
+          </p>
+        </div>
+      </div>
 
       <CitationModal open={citations} onClose={() => setCitations(false)} />
-      </main>
-    </>
+    </main>
   );
 }
